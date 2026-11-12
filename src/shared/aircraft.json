@@ -4,6 +4,7 @@
   "scale": 0.06,
   "visualRangeM": 90,
   "alertMeters": 120,
+  "lock": { "rangeM": 250, "fovDeg": 90 },
   "maxContacts": 5,
   "pingMemorySeconds": 15,
   "matchSeconds": 300,

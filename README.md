@@ -40,6 +40,10 @@ el tráfico WebSocket.
 - **Modo silencio:** pulsación larga. Apagar el radar te hace difícil de ver,
   pero también reduces lo que tú ves (×0.55 en ambos sentidos). El suelo visual
   de 90 m sigue mandando: nadie desaparece del todo.
+- **Cono de visión:** solo se fija lo que se tiene a la vista. Hay que estar a
+  menos de `lock.rangeM` (250 m) y dentro de un cono de `lock.fovDeg` (90°)
+  respecto al rumbo. Sin rumbo fiable (móvil parado, GPS sin `heading`) se
+  permite 360° para que el juego siga siendo jugable.
 - **5 minutos:** al agotarse el tiempo gana quien tenga más bloqueo acumulado.
 - **Reinicio:** 12 s de marcador y empieza otra partida.
 - **Memoria de pings:** un contacto que dejas de ver no desaparece de golpe;
@@ -193,7 +197,9 @@ build` también comprueba los tipos de los tests.
 ## Límites conocidos
 
 - El G2 no tiene GPS: la posición viene del teléfono (`getAppLocation`). Bajo
-  techo no hay señal y el juego usa la posición de respaldo.
+  techo no hay señal. El respaldo de posición (Retiro) **solo se activa en
+  desarrollo**: en producción, sin GPS no se emite posición en vez de inventar
+  una y apilar a todos los jugadores en el mismo punto.
 - El bucle de render es de 1 Hz a propósito: cada actualización viaja por el
   enlace con el móvil.
 - `whitelist` del permiso `network` en `app.json` hay que actualizarla con el

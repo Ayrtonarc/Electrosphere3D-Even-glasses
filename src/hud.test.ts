@@ -27,6 +27,7 @@ function track(over: Partial<TrackedContact> = {}): TrackedContact {
     distKm: 0.3,
     bearingDeg: 90,
     kind: 'bot',
+    visual: true,
     ageMs: 0,
     stale: false,
     ...over,

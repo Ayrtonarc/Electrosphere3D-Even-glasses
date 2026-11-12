@@ -62,6 +62,28 @@ function waitFor(messages, type, timeoutMs = 5000) {
   })
 }
 
+/** Espera un radar nuevo (a partir de `startIndex`) que cumpla el predicado. */
+function waitForRadarSince(messages, startIndex, predicate, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+    const timer = setInterval(() => {
+      const found = messages
+        .slice(startIndex)
+        .filter(m => m.type === 'radar')
+        .find(predicate)
+      if (found) {
+        clearInterval(timer)
+        resolve(found)
+        return
+      }
+      if (Date.now() - started > timeoutMs) {
+        clearInterval(timer)
+        reject(new Error('sin radar que cumpla la condicion'))
+      }
+    }, 50)
+  })
+}
+
 describe('protocolo WebSocket', () => {
   it('saluda, posiciona y manda radar con el contrato completo', async () => {
     const { ws, messages } = await openClient()
@@ -137,4 +159,40 @@ describe('protocolo WebSocket', () => {
     expect(radar.you.callsign).toBe('BRUTO')
     ws.close()
   }, 15_000)
+
+  it('el rumbo viaja y decide el cono de vision', async () => {
+    const a = await openClient()
+    a.ws.send(JSON.stringify({ type: 'join', callsign: 'CONO-A', aircraft: 'f35' }))
+    await waitFor(a.messages, 'welcome')
+
+    const b = await openClient()
+    b.ws.send(JSON.stringify({ type: 'join', callsign: 'CONO-B', aircraft: 'su27' }))
+    await waitFor(b.messages, 'welcome')
+
+    // B a ~100 m al norte de A
+    b.ws.send(JSON.stringify({ type: 'pos', lat: MADRID.lat + 0.0009, lon: MADRID.lon }))
+    // A mirando al norte: lo tiene de frente
+    a.ws.send(JSON.stringify({ type: 'pos', lat: MADRID.lat, lon: MADRID.lon, heading: 0 }))
+
+    const sinceStart = a.messages.length
+    const sees = await waitForRadarSince(
+      a.messages,
+      sinceStart,
+      m => m.contacts.some(c => c.callsign === 'CONO-B'),
+    )
+    expect(sees.contacts.find(c => c.callsign === 'CONO-B').visual).toBe(true)
+
+    // A se gira 180 grados: el mismo contacto sigue en el radar pero ya no se ve
+    const mark = a.messages.length
+    a.ws.send(JSON.stringify({ type: 'pos', lat: MADRID.lat, lon: MADRID.lon, heading: 180 }))
+    const blind = await waitForRadarSince(
+      a.messages,
+      mark,
+      m => m.contacts.some(c => c.callsign === 'CONO-B' && c.visual === false),
+    )
+    expect(blind.contacts.find(c => c.callsign === 'CONO-B').visual).toBe(false)
+
+    a.ws.close()
+    b.ws.close()
+  }, 20_000)
 })

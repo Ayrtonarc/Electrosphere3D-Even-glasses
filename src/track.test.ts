@@ -4,7 +4,7 @@ import { PING_MEMORY_MS, TICK_MS } from './types'
 import type { Contact } from './types'
 
 function contact(id: string, distKm = 0.2): Contact {
-  return { id, callsign: id.toUpperCase(), aircraft: 'su27', distKm, bearingDeg: 90, kind: 'bot' }
+  return { id, callsign: id.toUpperCase(), aircraft: 'su27', distKm, bearingDeg: 90, kind: 'bot', visual: true }
 }
 
 describe('TrackMemory', () => {

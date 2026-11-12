@@ -277,12 +277,12 @@ startLocation(bridge, fix => {
   trackSpeed(fix)
   ui.setFix(fix)
   render()
-})
+}, { allowFallback: import.meta.env.DEV })
 
 // El telefono manda su posicion al servidor cada 2 s.
 setInterval(() => {
   const fix = state.fix
-  if (fix && net.connected) net.sendPos(fix.lat, fix.lon, fix.altitudeM)
+  if (fix && net.connected) net.sendPos(fix.lat, fix.lon, fix.altitudeM, headingDeg ?? undefined)
 }, 2000)
 
 // CLICK_EVENT es 0 y protobuf omite los campos con valor 0, asi que un tap

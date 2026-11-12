@@ -71,6 +71,8 @@ export function botsAt(anchor, tSec) {
 export function createRules(cfg) {
   const BASE_KM = cfg.baseKm * cfg.scale
   const VISUAL_KM = cfg.visualRangeM / 1000
+  const LOCK_RANGE_KM = cfg.lock.rangeM / 1000
+  const LOCK_FOV_DEG = cfg.lock.fovDeg
   const TICK_MS = cfg.tickMs
   const MATCH_MS = cfg.matchSeconds * 1000
   const RESTART_MS = cfg.matchRestartSeconds * 1000
@@ -98,6 +100,17 @@ export function createRules(cfg) {
         emissionFactor(observer) *
         emissionFactor(target),
     )
+
+  /**
+   * Vision directa: el blanco esta cerca Y dentro del cono de ±FOV/2 respecto
+   * al rumbo del observador. Sin rumbo fiable (movil parado, GPS sin heading)
+   * se permite 360 grados para que el juego siga siendo jugable.
+   */
+  const inCone = (observer, target) => {
+    if (observer.heading == null) return true
+    const diff = Math.abs(((bearingDeg(observer, target) - observer.heading + 540) % 360) - 180)
+    return diff <= LOCK_FOV_DEG / 2
+  }
 
   function createGame({ now = () => Date.now() } = {}) {
     const players = new Map()
@@ -161,13 +174,18 @@ export function createRules(cfg) {
       return true
     }
 
-    function setPosition(id, lat, lon, altM) {
+    function setPosition(id, lat, lon, altM, headingDeg) {
       const me = players.get(id)
       if (!me || typeof lat !== 'number' || typeof lon !== 'number') return false
       me.lat = lat
       me.lon = lon
       // La altitud es opcional: si el GPS del movil no la da, se queda en null.
       if (typeof altM === 'number' && Number.isFinite(altM)) me.altM = altM
+      // El rumbo define el cono de vision; sin el se permite 360 grados.
+      me.heading =
+        typeof headingDeg === 'number' && Number.isFinite(headingDeg)
+          ? ((headingDeg % 360) + 360) % 360
+          : null
       me.seenAt = now()
       if (!anchor) {
         anchor = { lat, lon, altM: me.altM }
@@ -224,6 +242,7 @@ export function createRules(cfg) {
             distKm: Math.round(distKm * 1000) / 1000,
             bearingDeg: Math.round(bearingDeg(me, other)),
             kind: other.kind ?? 'human',
+            visual: distKm <= LOCK_RANGE_KM && inCone(me, other),
             emitting: other.emitting !== false,
             ...(typeof other.altM === 'number' ? { altM: Math.round(other.altM) } : {}),
           })
@@ -233,11 +252,12 @@ export function createRules(cfg) {
         // Bloqueo: el blanco elegido, o el mas cercano si no se ha elegido nada.
         let lock = null
         if (match.phase === 'flying') {
-          let target = contacts[0] ?? null
+          // Solo se fija lo que se ve: dentro del cono y a distancia visual.
+          let target = contacts.find(c => c.visual) ?? null
           if (me.targetId) {
-            target = contacts.find(c => c.id === me.targetId) ?? null
-            // Si el elegido ya no se ve, se suelta para no quedarse clavado.
-            if (!target) me.targetId = null
+            target = contacts.find(c => c.id === me.targetId && c.visual) ?? null
+            // Si el elegido ya no aparece en el radar, se suelta para no quedarse clavado.
+            if (!contacts.some(c => c.id === me.targetId)) me.targetId = null
           }
           if (!target) {
             me.lock = { id: null, ms: 0 }

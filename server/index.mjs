@@ -42,7 +42,7 @@ wss.on('connection', ws => {
       return
     }
 
-    if (msg.type === 'pos' && joined) game.setPosition(id, msg.lat, msg.lon, msg.alt)
+    if (msg.type === 'pos' && joined) game.setPosition(id, msg.lat, msg.lon, msg.alt, msg.heading)
 
     if (msg.type === 'emission' && joined) game.setEmission(id, msg.on)
 

@@ -60,7 +60,7 @@ function radarPayload(over: Partial<RadarState> = {}): RadarState {
     phase: 'flying',
     remainingMs: 240_000,
     contacts: [
-      { id: 'bot-1', callsign: 'FLANKER-1', aircraft: 'su27', distKm: 0.22, bearingDeg: 30, kind: 'bot' },
+      { id: 'bot-1', callsign: 'FLANKER-1', aircraft: 'su27', distKm: 0.22, bearingDeg: 30, kind: 'bot', visual: true },
     ],
     you: { callsign: 'VIPER-1', aircraft: 'f35', lat: 40.4, lon: -3.7 },
     rangeKm: 0.48,

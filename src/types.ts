@@ -18,6 +18,10 @@ export const TICK_MS = profiles.tickMs
 export const BASE_KM = profiles.baseKm * profiles.scale
 /** Suelo de deteccion visual: nadie es invisible a menos de esto. */
 export const VISUAL_RANGE_KM = profiles.visualRangeM / 1000
+/** Alcance de vision directa: dentro de esto y en el cono, puedes fijar. */
+export const LOCK_RANGE_KM = profiles.lock.rangeM / 1000
+/** Apertura total del cono de vision, en grados. */
+export const LOCK_FOV_DEG = profiles.lock.fovDeg
 export const ALERT_METERS = profiles.alertMeters
 export const MAX_CONTACTS = profiles.maxContacts
 export const SERVER_PORT = profiles.serverPort
@@ -32,6 +36,8 @@ export interface Contact {
   distKm: number
   bearingDeg: number
   kind: 'human' | 'bot'
+  /** true si lo tienes dentro del cono de vision: solo esos se pueden fijar. */
+  visual: boolean
   /** Altitud del contacto en metros; ausente si su GPS no la da. */
   altM?: number
   /** false si lleva el radar apagado (mas dificil de detectar). */

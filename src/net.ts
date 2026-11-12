@@ -57,11 +57,12 @@ export class NetClient {
     }
   }
 
-  sendPos(lat: number, lon: number, altM?: number): void {
+  sendPos(lat: number, lon: number, altM?: number, headingDeg?: number): void {
     if (!this.connected) return
-    // Sin altitud se omite el campo; el servidor lo interpreta como "no lo se".
-    const payload =
-      typeof altM === 'number' ? { type: 'pos', lat, lon, alt: altM } : { type: 'pos', lat, lon }
+    // Los campos que no se conocen se omiten; el servidor los lee como "no lo se".
+    const payload: Record<string, unknown> = { type: 'pos', lat, lon }
+    if (typeof altM === 'number') payload.alt = altM
+    if (typeof headingDeg === 'number') payload.heading = headingDeg
     this.ws!.send(JSON.stringify(payload))
   }
 

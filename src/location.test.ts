@@ -69,24 +69,34 @@ describe('startLocation', () => {
     expect(fixes).toHaveLength(0)
   })
 
-  it('cae a la posicion simulada si no hay GPS en 8 s', async () => {
+  it('cae a la posicion simulada si no hay GPS en 8 s y se permite el respaldo', async () => {
     const { bridge } = fakeBridge(null)
     const fixes: Fix[] = []
 
-    startLocation(bridge, fix => fixes.push(fix))
+    startLocation(bridge, fix => fixes.push(fix), { allowFallback: true })
     await vi.advanceTimersByTimeAsync(FALLBACK_AFTER_MS - 1)
     expect(fixes).toHaveLength(0)
 
     await vi.advanceTimersByTimeAsync(1)
     expect(fixes).toHaveLength(1)
     expect(fixes[0]).toMatchObject({ simulated: true, lat: 40.4155, lon: -3.6844 })
+    expect(fixes[0].headingDeg).toBeUndefined()
+  })
+
+  it('sin permiso explicito no inventa posicion', async () => {
+    const { bridge } = fakeBridge(null)
+    const fixes: Fix[] = []
+
+    startLocation(bridge, fix => fixes.push(fix))
+    await vi.advanceTimersByTimeAsync(FALLBACK_AFTER_MS * 3)
+    expect(fixes).toHaveLength(0)
   })
 
   it('no cae al respaldo si ya habia posicion real', async () => {
     const { bridge } = fakeBridge({ latitude: 40.4, longitude: -3.7 })
     const fixes: Fix[] = []
 
-    startLocation(bridge, fix => fixes.push(fix))
+    startLocation(bridge, fix => fixes.push(fix), { allowFallback: true })
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(FALLBACK_AFTER_MS)
 

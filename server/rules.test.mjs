@@ -314,3 +314,59 @@ describe('reglas · elegir blanco', () => {
     expect(radar.lock.callsign).toBe(radar.contacts[0].callsign)
   })
 })
+
+describe('reglas · cono de vision', () => {
+  it('lo de enfrente es visible y lo de detras no', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 0) // mirando al norte
+    const radar = tick().payloads.find(p => p.id === 'a').payload
+    const byName = name => radar.contacts.find(c => c.callsign === name)
+    expect(byName('FLANKER-1').visual).toBe(true) // 30°, 220 m
+    expect(byName('GHOST-1').visual).toBe(false) // 245°, 60 m
+  })
+
+  it('sin rumbo fiable se permite 360 grados', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    const radar = tick().payloads.find(p => p.id === 'a').payload
+    expect(radar.contacts.every(c => c.visual)).toBe(true)
+  })
+
+  it('no se fija lo que queda a la espalda', () => {
+    const { game, tick, advance } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 180) // de espaldas
+    let radar = tick().payloads.find(p => p.id === 'a').payload
+    expect(radar.contacts.every(c => !c.visual)).toBe(true)
+    expect(radar.lock).toBeNull()
+
+    advance(1000)
+    radar = tick().payloads.find(p => p.id === 'a').payload
+    expect(radar.lock).toBeNull()
+  })
+
+  it('girarse hacia el blanco arranca el bloqueo', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 180)
+    tick()
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 30)
+    const radar = tick().payloads.find(p => p.id === 'a').payload
+    expect(radar.lock).not.toBeNull()
+    expect(radar.lock.callsign).toBe('FLANKER-1')
+  })
+
+  it('de frente pero fuera del alcance visual no se fija', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.join('b', { callsign: 'B', aircraft: 'su27' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 0)
+    game.setPosition('b', MADRID.lat + 0.004, MADRID.lon, null, 0) // ~445 m al norte
+    const radar = tick().payloads.find(p => p.id === 'a').payload
+    const contact = radar.contacts.find(c => c.callsign === 'B')
+    expect(contact).toBeDefined() // el radar lo ve (480 m)
+    expect(contact.visual).toBe(false) // pero no esta a la vista
+  })
+})

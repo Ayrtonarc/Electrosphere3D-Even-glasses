@@ -31,7 +31,20 @@ function usable(loc: AppLocation | null): loc is AppLocation {
     !(loc.latitude === 0 && loc.longitude === 0)
 }
 
-export function startLocation(bridge: EvenAppBridge, onFix: (fix: Fix) => void): () => void {
+export interface StartLocationOptions {
+  /**
+   * Usar una posicion de respaldo si el GPS no responde. Solo para desarrollo:
+   * en produccion todos los jugadores sin senal acabarian apilados en el mismo
+   * punto y se bloquearian entre ellos.
+   */
+  allowFallback?: boolean
+}
+
+export function startLocation(
+  bridge: EvenAppBridge,
+  onFix: (fix: Fix) => void,
+  options: StartLocationOptions = {},
+): () => void {
   let hasReal = false
 
   const apply = (loc: AppLocation | null) => {
@@ -56,14 +69,16 @@ export function startLocation(bridge: EvenAppBridge, onFix: (fix: Fix) => void):
     bridge.getAppLocation().then(apply).catch(() => {})
   }, POLL_MS)
 
-  const fallback = setTimeout(() => {
-    if (hasReal) return
-    onFix({ ...FALLBACK, simulated: true, updatedAt: Date.now() })
-  }, FALLBACK_AFTER_MS)
+  const fallback = options.allowFallback
+    ? setTimeout(() => {
+        if (hasReal) return
+        onFix({ ...FALLBACK, simulated: true, updatedAt: Date.now() })
+      }, FALLBACK_AFTER_MS)
+    : null
 
   return () => {
     unsubscribe()
     clearInterval(poll)
-    clearTimeout(fallback)
+    if (fallback) clearTimeout(fallback)
   }
 }
