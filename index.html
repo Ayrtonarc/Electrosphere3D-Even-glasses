@@ -292,29 +292,72 @@
       }
       input:focus { border-color: #5c7a60; }
 
-      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-      .card {
-        text-align: left;
+      .hangar { display: flex; flex-direction: column; gap: 10px; }
+      .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+      .tab {
+        flex: none;
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 12px;
-        color: var(--text);
-        padding: 12px;
-        font-family: inherit;
+        border-radius: 999px;
+        color: var(--muted);
+        padding: 7px 13px;
+        font: inherit;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+      .tab.is-active {
+        color: #16221a;
+        background: var(--accent);
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+
+      .sheet {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        padding: 14px;
         display: flex;
         flex-direction: column;
-        gap: 3px;
-        cursor: pointer;
-        transition: border-color 0.15s ease, background 0.15s ease;
+        gap: 11px;
       }
-      .card.is-selected { border-color: var(--accent); background: #263329; }
-      .card-name { font-size: 15px; font-weight: 600; }
-      .card-role { font-size: 11px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
-      .card-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
-      .card-stats { font-size: 10.5px; color: #7d857e; margin-top: 4px; }
-      .card-special {
-        font-size: 10.5px;
+      .sheet-head { display: flex; align-items: baseline; gap: 9px; }
+      .sheet-name { font-size: 17px; font-weight: 600; }
+      .sheet-role {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .sheet-blurb { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+      .sheet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+      .sheet-stat {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11.5px;
+        color: var(--muted);
+        border-bottom: 1px solid #333;
+        padding-bottom: 4px;
+      }
+      .sheet-stat b {
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .sheet-special {
+        display: flex;
+        gap: 8px;
+        border-top: 1px solid #333;
+        padding-top: 9px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--muted);
+      }
+      .sheet-special b {
+        flex: none;
         color: var(--accent);
         letter-spacing: 0.06em;
       }
@@ -480,7 +523,10 @@
 
           <section class="field">
             <label>Aeronave</label>
-            <div id="aircraft" class="cards"></div>
+            <div id="aircraft" class="hangar">
+              <div id="tabs" class="tabs" role="group" aria-label="Elegir aeronave"></div>
+              <div id="sheet" class="sheet"></div>
+            </div>
           </section>
 
           <details class="advanced">

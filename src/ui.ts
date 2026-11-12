@@ -1,4 +1,11 @@
-import { AIRCRAFT, SERVER_PORT, type AircraftId, type ConnState, type RadarState } from './types'
+import {
+  AIRCRAFT,
+  SERVER_PORT,
+  type AircraftId,
+  type AircraftProfile,
+  type ConnState,
+  type RadarState,
+} from './types'
 import { formatKm } from './geo'
 import { arrowFor, clock, lockPercent, MISSILE_PERCENT } from './hud'
 import type { TrackedContact } from './track'
@@ -132,7 +139,8 @@ export function mountUi(handlers: UiHandlers): Ui {
   const howtoEl = $<HTMLButtonElement>('#howto')
   const callsignEl = $<HTMLInputElement>('#callsign')
   const serverEl = $<HTMLInputElement>('#server')
-  const cardsEl = $<HTMLDivElement>('#aircraft')
+  const tabsEl = $<HTMLDivElement>('#tabs')
+  const sheetEl = $<HTMLElement>('#sheet')
   const connectEl = $<HTMLButtonElement>('#connect')
   const disconnectEl = $<HTMLButtonElement>('#disconnect')
   const linkEl = $<HTMLSpanElement>('#link')
@@ -177,35 +185,95 @@ export function mountUi(handlers: UiHandlers): Ui {
     }
   }
 
-  for (const [id, profile] of Object.entries(AIRCRAFT) as [AircraftId, (typeof AIRCRAFT)[AircraftId]][]) {
-    const card = document.createElement('button')
-    card.type = 'button'
-    card.className = 'card'
-    card.dataset.id = id
-    card.innerHTML = `
-      <span class="card-name">${profile.name}</span>
-      <span class="card-role">${profile.role}</span>
-      <span class="card-blurb">${profile.blurb}</span>
-      <span class="card-stats">RCS ${profile.rcs} m² · radar ${profile.radar.toFixed(2)}</span>
-      ${profile.special ? `<span class="card-special">SPW · ${profile.special.name}</span>` : ''}
-    `
-    card.addEventListener('click', () => {
-      if (connected) return
-      aircraft = id
-      renderCards()
-      renderStats()
-      persist()
-      handlers.onAircraft(id)
-    })
-    cardsEl.appendChild(card)
-  }
+  // ── Hangar ────────────────────────────────────────────────────
+  // Pestanas arriba y ficha grande del elegido. Con cuatro aviones, una rejilla
+  // de tarjetas obliga a leer a 10 px, y lo que hay que comparar son cifras.
+  function buildTabs() {
+    tabsEl.replaceChildren()
 
-  function renderCards() {
-    for (const card of cardsEl.querySelectorAll<HTMLButtonElement>('.card')) {
-      card.classList.toggle('is-selected', card.dataset.id === aircraft)
+    for (const [id, profile] of Object.entries(AIRCRAFT) as [AircraftId, AircraftProfile][]) {
+      const tab = document.createElement('button')
+      tab.type = 'button'
+      tab.className = 'tab'
+      tab.dataset.id = id
+      tab.textContent = profile.name
+      tab.addEventListener('click', () => selectAircraft(id))
+      tabsEl.appendChild(tab)
     }
   }
-  renderCards()
+
+  function selectAircraft(id: AircraftId) {
+    if (connected || id === aircraft) return
+    aircraft = id
+    persist()
+    renderHangar()
+    renderStats()
+    handlers.onAircraft(id)
+  }
+
+  function renderHangar() {
+    for (const tab of tabsEl.querySelectorAll<HTMLButtonElement>('.tab')) {
+      const active = tab.dataset.id === aircraft
+      tab.classList.toggle('is-active', active)
+      tab.setAttribute('aria-pressed', String(active))
+    }
+
+    const profile = AIRCRAFT[aircraft]
+    const special = aircraftSpecial(aircraft)
+
+    const head = document.createElement('div')
+    head.className = 'sheet-head'
+
+    const name = document.createElement('span')
+    name.className = 'sheet-name'
+    name.textContent = profile.name
+
+    const role = document.createElement('span')
+    role.className = 'sheet-role'
+    role.textContent = profile.role
+    head.append(name, role)
+
+    const blurb = document.createElement('p')
+    blurb.className = 'sheet-blurb'
+    blurb.textContent = profile.blurb
+
+    const grid = document.createElement('div')
+    grid.className = 'sheet-stats'
+    for (const stat of aircraftStats(aircraft)) {
+      const cell = document.createElement('div')
+      cell.className = 'sheet-stat'
+
+      const label = document.createElement('span')
+      label.textContent = stat.label
+
+      const value = document.createElement('b')
+      value.textContent = stat.value
+
+      cell.append(label, value)
+      grid.appendChild(cell)
+    }
+
+    const parts: HTMLElement[] = [head, blurb, grid]
+
+    if (special) {
+      const row = document.createElement('div')
+      row.className = 'sheet-special'
+
+      const tag = document.createElement('b')
+      tag.textContent = special.name
+
+      const text = document.createElement('span')
+      text.textContent = special.blurb
+
+      row.append(tag, text)
+      parts.push(row)
+    }
+
+    sheetEl.replaceChildren(...parts)
+  }
+
+  buildTabs()
+  renderHangar()
 
   /**
    * Ficha del avion que llevas. Los valores se calculan con las mismas reglas

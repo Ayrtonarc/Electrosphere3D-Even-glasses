@@ -88,7 +88,7 @@ npm run simulate                                  # simulador de escritorio
 npx evenhub qr -i <TU_IP_LAN> -p 5173 --http      # gafas reales
 ```
 
-En la app companion: indicativo, aeronave y **Conectar**.
+En la app companion: indicativo, aeronave en el **hangar** y **Conectar**.
 
 La primera vez aparece un **tutorial de cuatro pasos** (qué es, cómo se gana,
 cómo se derriba y los cuatro gestos del táctil). Se puede saltar, y se vuelve a
@@ -163,7 +163,9 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
   (`WDE` / `MID` / `NRW`).
 - **Pulsación larga:** enciende o apaga el radar (modo silencio).
 - **Doble tap:** sale.
-- **Companion:** elección de aeronave, estado de conexión y un radar en canvas.
+- **Companion:** **hangar** con pestañas por avión y ficha grande del elegido
+  (arma especial, RCS, alcance, tiempo de fijado y a qué distancia te ven),
+  indicativo, estado de conexión y un radar en canvas.
 
 ## Bots
 
