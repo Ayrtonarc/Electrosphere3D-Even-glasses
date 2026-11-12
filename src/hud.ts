@@ -105,6 +105,8 @@ export function renderHud(input: HudInput): HudTexts {
   const missile = threat && threat.percent >= MISSILE_PERCENT ? threat : null
   const winner = radar?.result?.winner ?? null
   const rank = radar?.result?.rank ?? null
+  const round = radar?.round ?? null
+  const scenario = radar?.scenario ?? null
   const remainingMs = radar?.remainingMs ?? 0
   const rangeKm = radar?.rangeKm ?? 0
   const offline = conn !== 'open'
@@ -147,6 +149,7 @@ export function renderHud(input: HudInput): HudTexts {
       winner ? (winner === callsign ? 'BLANCO DERRIBADO' : `GANADOR: ${winner}`) : 'NADIE GANA',
     ]
     if (rank) lines.push(`RANGO ${rank} · ${radar?.result?.score ?? 0}%`)
+    if (round !== null && scenario) lines.push(`RONDA ${round} · ${scenario.name.toUpperCase()}`)
     lines.push('', 'Nueva partida', 'en unos segundos')
     detail = lines.join('\n')
     info = `${me.name}\nR ${formatKm(rangeKm)}`

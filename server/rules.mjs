@@ -79,6 +79,14 @@ export function createRules(cfg) {
   const MAX_CONTACTS = cfg.maxContacts
   const MAX_PLAYERS = cfg.maxPlayers
 
+  // Escenario de la ronda. Hoy solo hay uno, pero la tarjeta de partida y el HUD
+  // lo leen del servidor para que los ocho jugadores vean exactamente lo mismo.
+  const SCENARIO = {
+    id: cfg.scenario?.id ?? 'duel',
+    name: cfg.scenario?.name ?? 'Duelo',
+    rule: cfg.scenario?.rule ?? 'Gana quien cierra el primer bloqueo',
+  }
+
   const radarOf = id => cfg.types[id]?.radar ?? 1
   const rcsOf = id => cfg.types[id]?.rcs ?? 1
   const lockOf = id => cfg.types[id]?.lockSeconds ?? 10
@@ -132,7 +140,9 @@ export function createRules(cfg) {
     let bots = []
     let anchor = null
     let anchorAt = 0
-    let match = { phase: 'flying', endsAt: 0, startedAt: 0, winner: null, reason: '' }
+    /** Contador de rondas que no se reinicia al vaciarse la sala. */
+    let roundSeq = 0
+    let match = { phase: 'flying', endsAt: 0, startedAt: 0, round: 0, winner: null, reason: '' }
 
     /**
      * Bloqueo de cada bot. Vive aqui y no en el objeto del bot porque `botsAt`
@@ -207,7 +217,14 @@ export function createRules(cfg) {
     }
 
     function startMatch(at) {
-      match = { phase: 'flying', endsAt: at + MATCH_MS, startedAt: at, winner: null, reason: '' }
+      match = {
+        phase: 'flying',
+        endsAt: at + MATCH_MS,
+        startedAt: at,
+        round: ++roundSeq,
+        winner: null,
+        reason: '',
+      }
       for (const p of players.values()) {
         p.lock = { id: null, ms: 0 }
         // Mejor bloqueo de la partida: el rango se calcula con esto, asi que
@@ -219,7 +236,14 @@ export function createRules(cfg) {
 
     function finishMatch(winner, reason, at) {
       if (match.phase === 'finished') return
-      match = { phase: 'finished', endsAt: at + RESTART_MS, startedAt: match.startedAt, winner, reason }
+      match = {
+        phase: 'finished',
+        endsAt: at + RESTART_MS,
+        startedAt: match.startedAt,
+        round: match.round,
+        winner,
+        reason,
+      }
     }
 
     /**
@@ -266,7 +290,7 @@ export function createRules(cfg) {
         anchorAt = 0
         bots = []
         botLocks.clear()
-        match = { phase: 'flying', endsAt: 0, startedAt: 0, winner: null, reason: '' }
+        match = { phase: 'flying', endsAt: 0, startedAt: 0, round: 0, winner: null, reason: '' }
       }
       return true
     }
@@ -425,6 +449,8 @@ export function createRules(cfg) {
             type: 'radar',
             t: at,
             phase: match.phase,
+            round: match.round,
+            scenario: SCENARIO,
             remainingMs: Math.max(0, match.endsAt - at),
             contacts: contacts.slice(0, MAX_CONTACTS),
             you: {

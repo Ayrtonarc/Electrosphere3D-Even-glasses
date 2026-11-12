@@ -3,6 +3,14 @@ import { formatKm } from './geo'
 import { arrowFor, clock, lockPercent, MISSILE_PERCENT } from './hud'
 import type { TrackedContact } from './track'
 import type { Fix } from './location'
+import {
+  loadRecord,
+  recordLabel,
+  saveRecord,
+  settleRound,
+  type PlayerRecord,
+  type StorageLike,
+} from './record'
 
 export interface UiHandlers {
   onConnect: (url: string, callsign: string, aircraft: AircraftId) => void
@@ -109,6 +117,17 @@ export function mountUi(handlers: UiHandlers): Ui {
   let aircraft: AircraftId = stored.aircraft
   let connected = false
   let radioOn = loadRadio()
+
+  // `localStorage` puede lanzar al tocarlo (modo privado de Safari), asi que se
+  // resuelve una vez y el resto del modulo trabaja con `undefined` si no hay.
+  const storage: StorageLike | undefined = (() => {
+    try {
+      return globalThis.localStorage
+    } catch {
+      return undefined
+    }
+  })()
+  let record: PlayerRecord = loadRecord(storage)
 
   callsignEl.value = stored.callsign
   serverEl.value = defaultServerUrl()
@@ -236,19 +255,42 @@ export function mountUi(handlers: UiHandlers): Ui {
 
   function renderResult(radar: RadarState) {
     const winner = radar.result?.winner ?? null
-    const mine = callsignEl.value.trim()
+    const mine = radar.you.callsign
+    const rank = radar.result?.rank ?? null
+    const scenario = radar.scenario
+    const secs = Math.ceil(radar.remainingMs / 1000)
 
     const strong = document.createElement('strong')
-    const rank = radar.result?.rank ?? null
     const verdict = winner ? (winner === mine ? 'Victoria' : `Gana ${winner}`) : 'Empate'
     strong.textContent = rank ? `${verdict} · ${rank}` : verdict
 
-    const span = document.createElement('span')
-    const reason = radar.result?.reason ?? ''
+    const reason = document.createElement('span')
+    const why = radar.result?.reason ?? ''
     const score = radar.result?.score != null ? `${radar.result.score}% de bloqueo · ` : ''
-    span.textContent = `${score}${reason} · nueva partida en ${Math.ceil(radar.remainingMs / 1000)} s`
+    // Con escenario, la cuenta atras vive en la tarjeta de abajo.
+    reason.textContent = scenario ? `${score}${why}` : `${score}${why} · nueva partida en ${secs} s`
 
-    resultEl.replaceChildren(strong, span)
+    const nodes: HTMLElement[] = [strong, reason]
+
+    const summary = recordLabel(record)
+    if (summary) {
+      const line = document.createElement('span')
+      line.className = 'rec'
+      line.textContent = summary
+      nodes.push(line)
+    }
+
+    // Tarjeta de la ronda siguiente: identica para todos y, de paso, explica el
+    // salto que antes no tenia explicacion.
+    if (scenario) {
+      const card = document.createElement('div')
+      card.className = 'next'
+      const next = radar.round != null ? `ronda ${radar.round + 1} · ` : ''
+      card.textContent = `Siguiente · ${next}${scenario.name} — ${scenario.rule} · en ${secs} s`
+      nodes.push(card)
+    }
+
+    resultEl.replaceChildren(...nodes)
     resultEl.hidden = false
   }
 
@@ -326,8 +368,23 @@ export function mountUi(handlers: UiHandlers): Ui {
       warnEl.classList.remove('is-missile')
     }
 
-    if (radar.phase === 'finished') renderResult(radar)
-    else resultEl.hidden = true
+    if (radar.phase === 'finished') {
+      // El marcador se repinta cada segundo: `settleRound` es idempotente por
+      // numero de ronda, asi que una victoria no se cuenta doce veces.
+      const next = settleRound(record, {
+        round: radar.round ?? null,
+        winner: radar.result?.winner ?? null,
+        me: radar.you.callsign,
+        rank: radar.result?.rank ?? null,
+      })
+      if (next !== record) {
+        record = next
+        saveRecord(storage, record)
+      }
+      renderResult(radar)
+    } else {
+      resultEl.hidden = true
+    }
 
     renderContacts(tracks, radar.lock?.callsign ?? null)
     drawRadar(Math.max(radar.rangeKm, 0.2), tracks)

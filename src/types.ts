@@ -46,6 +46,13 @@ export interface Contact {
 
 export type MatchPhase = 'flying' | 'finished'
 
+/** Escenario de la ronda: lo mismo para todos los jugadores conectados. */
+export interface Scenario {
+  id: string
+  name: string
+  rule: string
+}
+
 /** Nota arcade de la partida. S derribo, A victoria por tiempo, B/C/D el resto. */
 export type Rank = 'S' | 'A' | 'B' | 'C' | 'D'
 
@@ -77,6 +84,10 @@ export interface Threat {
 export interface RadarState {
   t: number
   phase: MatchPhase
+  /** Numero de ronda; lo comparten todos los jugadores a la vez. */
+  round?: number
+  /** Escenario de la ronda: nombre y regla para la tarjeta de partida. */
+  scenario?: Scenario
   /** Milisegundos restantes de partida (o del reinicio si esta terminada). */
   remainingMs: number
   contacts: Contact[]

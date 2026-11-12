@@ -610,3 +610,49 @@ describe('reglas · calibracion de los bots', () => {
     expect(finish?.reason).toContain('bloqueo sobre')
   })
 })
+
+describe('reglas · ronda y escenario', () => {
+  it('cada partida sube el numero de ronda y lo manda en el payload', () => {
+    const { tick, advance } = soloGame('f35', { matchSeconds: 2 })
+    let last = null
+    for (let i = 0; i < 20; i++) {
+      last = tick()
+      advance(1000)
+    }
+    const payload = last.payloads[0].payload
+    expect(payload.scenario).toMatchObject({ id: 'duel', name: 'Duelo' })
+    expect(payload.scenario.rule).toContain('bloqueo')
+    // En 20 s ha dado tiempo a terminar la ronda 1 y empezar la 2.
+    expect(payload.round).toBeGreaterThan(1)
+  })
+
+  it('el escenario y la ronda son los mismos para todos', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.join('b', { callsign: 'B', aircraft: 'su27' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon)
+
+    const out = tick().payloads
+    expect(out[0].payload.scenario).toEqual(out[1].payload.scenario)
+    expect(out[0].payload.round).toBe(out[1].payload.round)
+  })
+
+  it('la ronda no se reinicia al vaciarse la sala', () => {
+    const { game, tick, advance } = makeGame({ matchSeconds: 2 })
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    for (let i = 0; i < 16; i++) {
+      tick()
+      advance(1000)
+    }
+    const before = tick().payloads[0].payload.round
+
+    game.remove('a')
+    game.join('b', { callsign: 'B', aircraft: 'f35' })
+    game.setPosition('b', MADRID.lat, MADRID.lon)
+    const after = tick().payloads[0].payload.round
+
+    expect(after).toBeGreaterThan(before)
+  })
+})

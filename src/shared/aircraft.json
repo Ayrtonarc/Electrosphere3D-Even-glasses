@@ -9,6 +9,11 @@
   "pingMemorySeconds": 15,
   "matchSeconds": 300,
   "matchRestartSeconds": 12,
+  "scenario": {
+    "id": "duel",
+    "name": "Duelo",
+    "rule": "Gana quien cierra el primer bloqueo"
+  },
   "bots": {
     "engageRangeM": 200,
     "silentFactor": 0.6,

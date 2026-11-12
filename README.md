@@ -113,10 +113,17 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
 - **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN · X`, `!! MISSILE · X`
   cuando el que te fija pasa del 70 % de su bloqueo, o `BLOQUEANDO · X`;
   parpadea cuando es una amenaza.
-- **Resultado:** `VICTORIA · S` / `GANA X` / `EMPATE · D` y cuenta atrás, en panel
-  centrado. La nota sale del mejor bloqueo de la partida contra lo que pide tu
-  avión: **S** derribo, **A** victoria por tiempo, **B** ≥75 %, **C** ≥35 %,
-  **D** el resto.
+- **Resultado:** `VICTORIA · S` / `GANA X` / `EMPATE · D`, la línea
+  `RONDA 3 · DUELO` y la cuenta atrás, en panel centrado. La nota sale del mejor
+  bloqueo de la partida contra lo que pide tu avión: **S** derribo, **A** victoria
+  por tiempo, **B** ≥75 %, **C** ≥35 %, **D** el resto.
+- **Tarjeta de la ronda siguiente:** en los 12 s de marcador, el móvil añade
+  `Siguiente · ronda 4 · Duelo — Gana quien cierra el primer bloqueo · en 9 s`.
+  El número de ronda y el escenario los manda el servidor, así que los ocho
+  jugadores leen exactamente lo mismo.
+- **Récord:** el móvil guarda rondas jugadas, victorias, racha y mejor nota en
+  `localStorage` y los enseña en el debriefing (`2/3 rondas · 2 seguidas · mejor S`).
+  Se contabiliza una sola vez por ronda.
 - **Radio:** voz sintetizada (`es-ES`) con el guion de un juego de cabina — saludo
   al entrar en vuelo, contacto nuevo con rumbo y distancia, blanco fijado,
   «mantén el bloqueo» al 50 %, aviso cuando te fijan, grito de misil, resultado
@@ -196,6 +203,7 @@ npm run test:watch
 | `src/reconnect.test.ts` | espera creciente con tope y ruido, `error`+`close` como un solo fallo, reinicio del historial |
 | `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
 | `src/radio.test.ts` | guion de radio (prioridades, transiciones, contactos) y huecos entre frases |
+| `src/record.test.ts` | récord local: idempotencia por ronda, rachas, mejor nota y almacenamiento corrupto |
 | `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía, rango, amenaza y bots que fijan |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 

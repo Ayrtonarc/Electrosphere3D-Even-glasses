@@ -288,3 +288,34 @@ describe('renderHud · amenaza y rango', () => {
     expect(hud.detail).not.toContain('RANGO')
   })
 })
+
+describe('renderHud · tarjeta de ronda', () => {
+  const duelo = { id: 'duel', name: 'Duelo', rule: 'Gana quien cierra el primer bloqueo' }
+
+  it('el panel de resultado lleva el numero de ronda y el escenario', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          phase: 'finished',
+          round: 3,
+          scenario: duelo,
+          result: { winner: 'VIPER-1', reason: 'bloqueo sobre FLANKER-1', rank: 'S', score: 100 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('VICTORIA · S')
+    expect(hud.detail).toContain('RONDA 3 · DUELO')
+  })
+
+  it('sin escenario (servidor viejo) no aparece la linea', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          phase: 'finished',
+          result: { winner: null, reason: 'tiempo agotado' },
+        }),
+      }),
+    )
+    expect(hud.detail).not.toContain('RONDA')
+  })
+})
