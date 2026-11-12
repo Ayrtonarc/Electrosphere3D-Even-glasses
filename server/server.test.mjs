@@ -71,7 +71,7 @@ describe('protocolo WebSocket', () => {
     expect(welcome.id).toBeTruthy()
     expect(welcome.tickMs).toBeGreaterThan(0)
 
-    ws.send(JSON.stringify({ type: 'pos', ...MADRID }))
+    ws.send(JSON.stringify({ type: 'pos', ...MADRID, alt: 650 }))
 
     const radar = await waitFor(messages, 'radar')
     expect(radar.phase).toBe('flying')
@@ -84,6 +84,7 @@ describe('protocolo WebSocket', () => {
       distKm: expect.any(Number),
       bearingDeg: expect.any(Number),
       kind: expect.any(String),
+      altM: expect.any(Number),
     })
     expect(radar.lock).not.toBeNull()
     expect(radar.you).toMatchObject({ callsign: 'TEST', aircraft: 'f35' })

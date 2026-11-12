@@ -62,6 +62,8 @@ export function botsAt(anchor, tSec) {
       kind: 'bot',
       lat: pos.lat,
       lon: pos.lon,
+      // Los bots vuelan a la altura del ancla: sin dato no se manda el campo.
+      altM: anchor.altM ?? undefined,
     }
   })
 }
@@ -111,6 +113,7 @@ export function createRules(cfg) {
         aircraft: cfg.types[info.aircraft] ? info.aircraft : 'su27',
         lat: null,
         lon: null,
+        altM: null,
         seenAt: now(),
         lock: { id: null, ms: 0 },
       }
@@ -129,15 +132,21 @@ export function createRules(cfg) {
       return true
     }
 
-    function setPosition(id, lat, lon) {
+    function setPosition(id, lat, lon, altM) {
       const me = players.get(id)
       if (!me || typeof lat !== 'number' || typeof lon !== 'number') return false
       me.lat = lat
       me.lon = lon
+      // La altitud es opcional: si el GPS del movil no la da, se queda en null.
+      if (typeof altM === 'number' && Number.isFinite(altM)) me.altM = altM
       me.seenAt = now()
       if (!anchor) {
-        anchor = { lat, lon }
+        anchor = { lat, lon, altM: me.altM }
         anchorAt = me.seenAt
+      } else if (anchor.altM == null && typeof me.altM === 'number') {
+        // El primer fix puede llegar sin altitud (GPS arrancando): se adopta en
+        // cuanto alguien la da, o los bots se quedarian sin altitud para siempre.
+        anchor.altM = me.altM
       }
       return true
     }
@@ -186,6 +195,7 @@ export function createRules(cfg) {
             distKm: Math.round(distKm * 1000) / 1000,
             bearingDeg: Math.round(bearingDeg(me, other)),
             kind: other.kind ?? 'human',
+            ...(typeof other.altM === 'number' ? { altM: Math.round(other.altM) } : {}),
           })
         }
         contacts.sort((a, b) => a.distKm - b.distKm)

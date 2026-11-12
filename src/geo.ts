@@ -60,3 +60,9 @@ export function formatKm(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`
   return `${km.toFixed(1)} km`
 }
+
+/** Desvio de un rumbo respecto a otro, en (-180, 180]. Positivo = a la derecha. */
+export function deviationDeg(targetBearing: number, heading: number): number {
+  const delta = ((targetBearing - heading + 540) % 360) - 180
+  return delta === -180 ? 180 : delta
+}

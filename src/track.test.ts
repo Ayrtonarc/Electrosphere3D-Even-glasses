@@ -56,3 +56,32 @@ describe('TrackMemory', () => {
     expect(memory.list(0)).toHaveLength(0)
   })
 })
+
+describe('tasa de cierre', () => {
+  it('sin dos pings no hay tasa', () => {
+    const memory = new TrackMemory()
+    memory.update([contact('a', 0.2)], 0)
+    expect(memory.list(0)[0].closureMps).toBeUndefined()
+  })
+
+  it('positiva cuando se acerca', () => {
+    const memory = new TrackMemory()
+    memory.update([contact('a', 0.222)], 0)
+    memory.update([contact('a', 0.218)], 2000)
+    expect(memory.list(2000)[0].closureMps).toBeCloseTo(2, 6)
+  })
+
+  it('negativa cuando se aleja', () => {
+    const memory = new TrackMemory()
+    memory.update([contact('a', 0.218)], 0)
+    memory.update([contact('a', 0.226)], 2000)
+    expect(memory.list(2000)[0].closureMps).toBeCloseTo(-4, 6)
+  })
+
+  it('no divide por cero si las lecturas coinciden en el tiempo', () => {
+    const memory = new TrackMemory()
+    memory.update([contact('a', 0.22)], 500)
+    memory.update([contact('a', 0.20)], 500)
+    expect(memory.list(500)[0].closureMps).toBeUndefined()
+  })
+})

@@ -32,6 +32,8 @@ export interface Contact {
   distKm: number
   bearingDeg: number
   kind: 'human' | 'bot'
+  /** Altitud del contacto en metros; ausente si su GPS no la da. */
+  altM?: number
 }
 
 export type MatchPhase = 'flying' | 'finished'

@@ -194,3 +194,37 @@ describe('reglas · ciclo de partida', () => {
     expect(payloads.map(p => p.id)).toEqual(['a'])
   })
 })
+
+describe('reglas · altitud', () => {
+  it('el ancla toma la altitud del primer jugador y los bots la heredan', () => {
+    const ctx = makeGame()
+    ctx.game.join('a', { callsign: 'A', aircraft: 'su27' })
+    ctx.game.setPosition('a', MADRID.lat, MADRID.lon, 650)
+    const bots = botsAt(ctx.game.anchor, 0)
+    expect(bots.every(b => b.altM === 650)).toBe(true)
+  })
+
+  it('sin altitud no se inventa el campo', () => {
+    const ctx = makeGame()
+    ctx.game.join('a', { callsign: 'A', aircraft: 'su27' })
+    ctx.game.setPosition('a', MADRID.lat, MADRID.lon)
+    const bots = botsAt(ctx.game.anchor, 0)
+    expect(bots.every(b => b.altM === undefined)).toBe(true)
+  })
+
+  it('los contactos llevan la altitud redondeada', () => {
+    const ctx = soloGame('su27')
+    ctx.game.setPosition('a', MADRID.lat, MADRID.lon, 652.6)
+    const { payloads } = ctx.tick()
+    const radar = payloads[0].payload
+    expect(radar.contacts.length).toBeGreaterThan(0)
+    expect(radar.contacts[0].altM).toBe(653)
+  })
+
+  it('una altitud no finita no rompe la posicion', () => {
+    const ctx = makeGame()
+    ctx.game.join('a', { callsign: 'A', aircraft: 'su27' })
+    expect(ctx.game.setPosition('a', MADRID.lat, MADRID.lon, Number.NaN)).toBe(true)
+    expect(ctx.game.players.get('a').altM).toBeNull()
+  })
+})

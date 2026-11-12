@@ -11,13 +11,17 @@ export interface Fix {
   lat: number
   lon: number
   accuracy?: number
+  /** Altitud sobre el nivel del mar en metros, si el GPS la da. */
+  altitudeM?: number
+  /** Rumbo sobre el terreno que ya calcula el GPS (0-360). */
+  headingDeg?: number
   /** true si es la posicion de respaldo (simulador / sin GPS). */
   simulated: boolean
   updatedAt: number
 }
 
 /** Retiro, Madrid. Solo se usa cuando no hay GPS real. */
-const FALLBACK = { lat: 40.4155, lon: -3.6844 }
+const FALLBACK = { lat: 40.4155, lon: -3.6844, altitudeM: 650 }
 
 const POLL_MS = 5000
 const FALLBACK_AFTER_MS = 8000
@@ -37,6 +41,8 @@ export function startLocation(bridge: EvenAppBridge, onFix: (fix: Fix) => void):
       lat: loc.latitude,
       lon: loc.longitude,
       accuracy: loc.accuracy,
+      altitudeM: loc.altitude,
+      headingDeg: loc.heading,
       simulated: false,
       updatedAt: Date.now(),
     })

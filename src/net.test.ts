@@ -164,6 +164,22 @@ describe('NetClient', () => {
     expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: 'pos', lat: 40.4, lon: -3.7 })
   })
 
+  it('adjunta la altitud cuando se la dan', () => {
+    const { net } = setup()
+    net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })
+    const socket = lastSocket()
+    socket.open()
+
+    net.sendPos(40.4, -3.7, 652.4)
+
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({
+      type: 'pos',
+      lat: 40.4,
+      lon: -3.7,
+      alt: 652.4,
+    })
+  })
+
   it('desconectar cierra sin avisar de cierre', () => {
     const { net, states } = setup()
     net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })

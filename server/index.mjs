@@ -42,7 +42,7 @@ wss.on('connection', ws => {
       return
     }
 
-    if (msg.type === 'pos' && joined) game.setPosition(id, msg.lat, msg.lon)
+    if (msg.type === 'pos' && joined) game.setPosition(id, msg.lat, msg.lon, msg.alt)
   })
 
   ws.on('close', () => {
@@ -72,10 +72,16 @@ setInterval(() => {
   }
 }, rules.TICK_MS)
 
-console.log(`Aeronet escuchando en ws://0.0.0.0:${PORT}`)
-console.log(
-  `Perfiles: ${Object.entries(cfg.types)
-    .map(([, v]) => `${v.name} (radar ${v.radar}, rcs ${v.rcs}, bloqueo ${v.lockSeconds}s)`)
-    .join(' · ')}`,
-)
-console.log(`Alcance maximo del radar en juego: ${Math.round(rules.BASE_KM * 1000)} m base · suelo visual ${Math.round(rules.VISUAL_KM * 1000)} m`)
+// Solo anunciamos la escucha cuando el socket esta realmente abierto: los
+// clientes (y el test de contrato) esperan esa linea para conectarse.
+wss.on('listening', () => {
+  console.log(`Aeronet escuchando en ws://0.0.0.0:${PORT}`)
+  console.log(
+    `Perfiles: ${Object.entries(cfg.types)
+      .map(([, v]) => `${v.name} (radar ${v.radar}, rcs ${v.rcs}, bloqueo ${v.lockSeconds}s)`)
+      .join(' · ')}`,
+  )
+  console.log(
+    `Alcance maximo del radar en juego: ${Math.round(rules.BASE_KM * 1000)} m base · suelo visual ${Math.round(rules.VISUAL_KM * 1000)} m`,
+  )
+})

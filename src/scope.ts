@@ -1,18 +1,96 @@
-// Dibujo del radar de las gafas.
-//
-// El display admite un contenedor de imagen (max 288x144) que se actualiza con
-// `updateImageRawData`. Se dibuja aqui en un canvas y se envia como PNG: el SDK
-// lo decodifica, lo escala y lo convierte a los 16 verdes del panel.
+// Geometria del radar de las gafas: donde cae cada contacto, que silueta le
+// corresponde y donde va su etiqueta. Sin canvas ni DOM: todo puro y testeable.
+// El pintado vive en screen.ts.
+
+import type { AircraftId } from './types'
 
 export interface ScopeBlip {
   distKm: number
   bearingDeg: number
   stale: boolean
   locked: boolean
+  /** Tipo de caza: decide que silueta se dibuja en el radar. */
+  aircraft: AircraftId
+  /** Indicativo, se pinta al lado de la silueta. */
+  callsign: string
+  /** Acercamiento en m/s; `undefined` si aun no hay dos pings. */
+  closureMps?: number
+  /** Altitud del contacto en metros, si el servidor la conoce. */
+  altM?: number
 }
 
-export const SCOPE_W = 200
-export const SCOPE_H = 144
+export type Point = readonly [x: number, y: number]
+
+/**
+ * Siluetas vistas desde arriba, morro hacia el norte (-y) y centradas en (0,0).
+ * Las proporciones estan exageradas a proposito: en 200x144 un contacto ocupa
+ * ~10 px, asi que el F-35 es corto y ancho (ala en delta) y el Su-27 largo y
+ * estrecho (doble deriva) para distinguirlos de un vistazo.
+ */
+const PLANFORMS = {
+  f35: [
+    [0, -5.6],
+    [2, -1.2],
+    [8, 3.2],
+    [8, 4.4],
+    [2.2, 3.4],
+    [2.2, 6],
+    [-2.2, 6],
+    [-2.2, 3.4],
+    [-8, 4.4],
+    [-8, 3.2],
+    [-2, -1.2],
+  ],
+  su27: [
+    [0, -9.8],
+    [1.3, -6.2],
+    [1.7, -3.2],
+    [2.1, 0.4],
+    [7.2, 5.2],
+    [7.2, 6.3],
+    [2.6, 4],
+    [2.6, 6.6],
+    [3.1, 8.9],
+    [1.5, 9],
+    [0, 9],
+    [-1.5, 9],
+    [-3.1, 8.9],
+    [-2.6, 6.6],
+    [-2.6, 4],
+    [-7.2, 6.3],
+    [-7.2, 5.2],
+    [-2.1, 0.4],
+    [-1.7, -3.2],
+    [-1.3, -6.2],
+  ],
+  unknown: [
+    [0, -6],
+    [6, 3.5],
+    [0, 5.5],
+    [-6, 3.5],
+  ],
+} satisfies Record<string, Point[]>
+
+export type PlanformId = keyof typeof PLANFORMS
+
+/** Tipos de aeronave que ya tienen silueta registrada. */
+export const PLANFORM_IDS = Object.keys(PLANFORMS) as PlanformId[]
+
+/** Silueta registrada para un tipo de aeronave; neutra si aun no tiene una. */
+export function planformFor(aircraft: string): readonly Point[] {
+  return PLANFORMS[aircraft as PlanformId] ?? PLANFORMS.unknown
+}
+
+/**
+ * Indicativo para el radar. El panel mapea la imagen 1:1, asi que el texto
+ * compite por pixeles con la silueta: se queda en pocos caracteres.
+ */
+export function shortLabel(callsign: string, max = 5): string {
+  const clean = callsign.trim().toUpperCase()
+  if (clean.length <= max) return clean
+  // "FLANKER-1" -> "FLANK", pero sin cortar dejando el guion colgando
+  return clean.slice(0, max).replace(/[-_ ]+$/, '')
+}
 
 /**
  * Distancia y rumbo a coordenadas del radar, con el centro en (0,0).
@@ -32,106 +110,80 @@ export function plotXY(
   return { x: x === 0 ? 0 : x, y: y === 0 ? 0 : y }
 }
 
-function drawAircraft(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number): void {
-  // Silueta de caza vista desde arriba, morro hacia el norte.
+export function drawPlanform(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angleRad: number,
+  points: readonly Point[],
+  scale: number,
+  color: string,
+): void {
+  // Las coordenadas ya estan en unidades de "escala 9"; el resto escala lineal.
   const s = scale / 9
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate(angleRad)
   ctx.beginPath()
-  ctx.moveTo(cx, cy - 9 * s)
-  ctx.lineTo(cx + 2 * s, cy - 2 * s)
-  ctx.lineTo(cx + 9 * s, cy + 3 * s)
-  ctx.lineTo(cx + 9 * s, cy + 5 * s)
-  ctx.lineTo(cx + 2 * s, cy + 4 * s)
-  ctx.lineTo(cx + 1.5 * s, cy + 8 * s)
-  ctx.lineTo(cx - 1.5 * s, cy + 8 * s)
-  ctx.lineTo(cx - 2 * s, cy + 4 * s)
-  ctx.lineTo(cx - 9 * s, cy + 5 * s)
-  ctx.lineTo(cx - 9 * s, cy + 3 * s)
-  ctx.lineTo(cx - 2 * s, cy - 2 * s)
-  ctx.closePath()
-  ctx.fillStyle = 'rgba(255,255,255,0.95)'
-  ctx.fill()
-}
-
-function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const toArray = async (blob: Blob) => resolve(new Uint8Array(await blob.arrayBuffer()))
-    if (typeof canvas.toBlob === 'function') {
-      canvas.toBlob(blob => (blob ? toArray(blob) : reject(new Error('toBlob vacio'))), 'image/png')
-      return
-    }
-    try {
-      const base64 = canvas.toDataURL('image/png').split(',')[1] ?? ''
-      const binary = atob(base64)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-      resolve(bytes)
-    } catch (err) {
-      reject(err)
-    }
+  points.forEach(([px, py], i) => {
+    if (i === 0) ctx.moveTo(px * s, py * s)
+    else ctx.lineTo(px * s, py * s)
   })
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.fill()
+  ctx.restore()
 }
 
-/** Dibuja la pantalla radar y devuelve los bytes PNG listos para el bridge. */
-export async function renderScopePng(blips: ScopeBlip[], rangeKm: number): Promise<Uint8Array> {
-  const canvas = document.createElement('canvas')
-  canvas.width = SCOPE_W
-  canvas.height = SCOPE_H
-  const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('canvas 2d no disponible')
+export interface LabelArea {
+  width: number
+  height: number
+  /** Separacion entre el icono y el texto. */
+  gap: number
+  /** Margen minimo con el borde. */
+  padX: number
+  padY: number
+}
 
-  ctx.fillStyle = '#000000'
-  ctx.fillRect(0, 0, SCOPE_W, SCOPE_H)
+export interface LabelPlacement {
+  x: number
+  y: number
+  align: 'left' | 'right'
+}
 
-  const cx = SCOPE_W / 2
-  const cy = SCOPE_H / 2 + 4
-  const radius = 56
+/**
+ * Coloca la etiqueta en el lado exterior del contacto (hacia el borde mas
+ * cercano) sin salirse del area visible. Pura a proposito: el clamp contra los
+ * bordes es lo que mas se rompe al mover el layout.
+ */
+export function placeLabel(
+  px: number,
+  py: number,
+  textWidth: number,
+  area: LabelArea,
+): LabelPlacement {
+  const toRight = px >= area.width / 2
+  const align: LabelPlacement['align'] = toRight ? 'left' : 'right'
+  const raw = px + (toRight ? area.gap : -area.gap)
+  const x = toRight
+    ? Math.min(raw, area.width - area.padX - textWidth)
+    : Math.max(raw, area.padX + textWidth)
+  const y = Math.min(Math.max(py, area.padY), area.height - area.padY)
+  return { x, y, align }
+}
 
-  // anillos de alcance
-  ctx.lineWidth = 1
-  for (const frac of [1 / 3, 2 / 3, 1]) {
-    ctx.strokeStyle = frac === 1 ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.22)'
-    ctx.beginPath()
-    ctx.arc(cx, cy, radius * frac, 0, Math.PI * 2)
-    ctx.stroke()
+/**
+ * Marcacion de referencia para la cinta de rumbo del HUD: la del blanco fijado
+ * y, si no hay, la del contacto fresco mas cercano. `null` si no hay nada.
+ */
+export function referenceBearing(
+  blips: readonly ScopeBlip[],
+  lockedCallsign: string | null,
+): number | null {
+  if (lockedCallsign) {
+    const locked = blips.find(b => b.callsign === lockedCallsign)
+    if (locked) return locked.bearingDeg
   }
-
-  // ejes y marcas cardinales
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)'
-  ctx.beginPath()
-  ctx.moveTo(cx, cy - radius)
-  ctx.lineTo(cx, cy + radius)
-  ctx.moveTo(cx - radius, cy)
-  ctx.lineTo(cx + radius, cy)
-  ctx.stroke()
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)'
-  ctx.beginPath()
-  ctx.moveTo(cx, cy - radius)
-  ctx.lineTo(cx, cy - radius + 5)
-  ctx.stroke()
-
-  // tu aeronave
-  drawAircraft(ctx, cx, cy, 9)
-
-  // contactos
-  for (const blip of blips) {
-    const { x, y } = plotXY(blip.distKm, blip.bearingDeg, rangeKm, radius)
-    const px = cx + x
-    const py = cy + y
-
-    if (blip.locked) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-      ctx.lineWidth = 1
-      ctx.beginPath()
-      ctx.arc(px, py, 5, 0, Math.PI * 2)
-      ctx.stroke()
-    }
-
-    ctx.fillStyle = blip.stale ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,1)'
-    ctx.beginPath()
-    ctx.arc(px, py, blip.stale ? 1.6 : 2.6, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  return canvasToPng(canvas)
+  const fresh = blips.filter(b => !b.stale).sort((a, b) => a.distKm - b.distKm)[0]
+  return fresh ? fresh.bearingDeg : null
 }

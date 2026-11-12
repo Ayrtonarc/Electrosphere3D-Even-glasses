@@ -2,100 +2,80 @@ import {
   CreateStartUpPageContainer,
   ImageContainerProperty,
   ImageRawDataUpdate,
+  ImuReportPace,
   OsEventTypeList,
   TextContainerProperty,
-  TextContainerUpgrade,
   waitForEvenAppBridge,
 } from '@evenrealities/even_hub_sdk'
 import { NetClient } from './net'
 import { startLocation, type Fix } from './location'
 import { mountUi } from './ui'
-import { renderHud } from './hud'
-import { renderScopePng } from './scope'
+import { renderHud, type HudTexts } from './hud'
+import { bearingDeg, distanceKm } from './geo'
+import { cycleRange } from './instruments'
+import { renderScreenTiles, TILE_COUNT, TILE_H, TILE_W, tileOrigin } from './screen'
+import { attitudeChanged, attitudeFromImu, smoothAttitude, type Attitude } from './imu'
 import { TrackMemory } from './track'
 import type { ConnState, RadarState } from './types'
 
 const bridge = await waitForEvenAppBridge()
 
-// Reparto del display (576x288):
-//   aviso   (0,0)     576x40    situacion
-//   radar   (0,44)    200x144   imagen
-//   info    (0,192)   200x48    tu avion y alcance
-//   detalle (204,44)  372x196   bloqueo + contactos
-//   pie     (0,244)   576x40    reloj y acciones
-const alertPanel = new TextContainerProperty({
+// Pantalla completa (576x288) como HUD de realidad aumentada.
+//
+// Un contenedor de imagen admite 288x144 como maximo, asi que la pantalla se
+// pinta en un canvas logico de 576x288 y se trocea en 4 imagenes:
+//
+//   tile 0 (0,0)        tile 1 (288,0)
+//   tile 2 (0,144)      tile 3 (288,144)
+//
+// No hay contenedores de texto visibles: el HUD entero se dibuja en el canvas.
+// `tapPanel` existe solo porque el firmware necesita un contenedor con
+// isEventCapture para entregar los gestos (tap y doble tap); va vacio y sin
+// borde, en una esquina donde el radar ya es negro.
+const scopeTiles = Array.from({ length: TILE_COUNT }, (_, i) => {
+  const origin = tileOrigin(i)
+  return new ImageContainerProperty({
+    xPosition: origin.x,
+    yPosition: origin.y,
+    width: TILE_W,
+    height: TILE_H,
+    containerID: i + 1,
+    containerName: `scope-${i}`,
+  })
+})
+
+const tapPanel = new TextContainerProperty({
   xPosition: 0,
   yPosition: 0,
-  width: 576,
-  height: 40,
-  borderWidth: 1,
-  borderColor: 5,
-  paddingLength: 4,
-  containerID: 1,
-  containerName: 'alert',
-  content: 'CONECTANDO...',
+  width: 20,
+  height: 20,
+  borderWidth: 0,
+  borderColor: 0,
+  paddingLength: 0,
+  containerID: TILE_COUNT + 1,
+  containerName: 'tap',
+  content: ' ',
   isEventCapture: 1,
-})
-
-const scopeImage = new ImageContainerProperty({
-  xPosition: 0,
-  yPosition: 44,
-  width: 200,
-  height: 138,
-  containerID: 5,
-  containerName: 'scope',
-})
-
-const infoPanel = new TextContainerProperty({
-  xPosition: 0,
-  yPosition: 192,
-  width: 200,
-  height: 48,
-  borderWidth: 0,
-  borderColor: 5,
-  paddingLength: 4,
-  containerID: 2,
-  containerName: 'info',
-  content: ' ',
-  isEventCapture: 0,
-})
-
-const detailPanel = new TextContainerProperty({
-  xPosition: 204,
-  yPosition: 44,
-  width: 372,
-  height: 196,
-  borderWidth: 0,
-  borderColor: 5,
-  paddingLength: 4,
-  containerID: 3,
-  containerName: 'detail',
-  content: ' ',
-  isEventCapture: 0,
-})
-
-const footerPanel = new TextContainerProperty({
-  xPosition: 0,
-  yPosition: 244,
-  width: 576,
-  height: 40,
-  borderWidth: 0,
-  borderColor: 5,
-  paddingLength: 4,
-  containerID: 4,
-  containerName: 'footer',
-  content: ' ',
-  isEventCapture: 0,
 })
 
 const created = await bridge.createStartUpPageContainer(
   new CreateStartUpPageContainer({
-    containerTotalNum: 5,
-    textObject: [alertPanel, infoPanel, detailPanel, footerPanel],
-    imageObject: [scopeImage],
+    containerTotalNum: TILE_COUNT + 1,
+    textObject: [tapPanel],
+    imageObject: scopeTiles,
   }),
 )
 if (created !== 0) console.error('createStartUpPageContainer failed:', created)
+
+// IMU a 1 Hz: el horizonte gira en los 4 tiles, asi que subir la frecuencia
+// multiplica el trafico por BLE. A P1000 coincide con el tick del radar y no
+// cuesta ancho de banda extra. Para mas fluidez, subir a P300 y medir.
+bridge
+  .imuControl(true, ImuReportPace.P1000)
+  .then(ok => {
+    if (!ok) console.warn('imuControl: el host no acepta el IMU; sin horizonte')
+  })
+  .catch(err => console.warn('imuControl fallo:', err))
 
 const state = {
   view: 'radar' as 'radar' | 'info',
@@ -103,78 +83,119 @@ const state = {
   connDetail: undefined as string | undefined,
   radar: null as RadarState | null,
   fix: null as Fix | null,
+  /** Fraccion del alcance maximo dibujada en el radar (selector de alcance). */
+  rangeScale: 1,
 }
 
-const pushed: Record<number, string> = {}
+// Velocidad propia: el GPS no la da, se saca de dos lecturas consecutivas.
+// Se suaviza porque a pie el error del GPS (±10 m) la hace saltar.
+let lastFix: { lat: number; lon: number; at: number } | null = null
+let speedKph: number | null = null
+let headingDeg: number | null = null
+let altM: number | null = null
+let attitude: Attitude | null = null
+let lastImuAt = 0
 
-function push(containerID: number, containerName: string, content: string) {
-  if (pushed[containerID] === content) return
-  pushed[containerID] = content
-  bridge
-    .textContainerUpgrade(new TextContainerUpgrade({ containerID, containerName, content }))
-    .catch(err => console.error('textContainerUpgrade failed:', err))
+/** No repintar el HUD por cada muestra: el horizonte toca los 4 tiles. */
+const IMU_MIN_INTERVAL_MS = 250
+const IMU_DEADBAND_DEG = 2
+const IMU_SMOOTHING = 0.35
+
+/** Media circular: dos rumbos a 350 y 10 grados estan a 20, no a 340. */
+function blendHeading(from: number, to: number, weight: number): number {
+  const a = (from * Math.PI) / 180
+  const b = (to * Math.PI) / 180
+  const x = Math.cos(a) * (1 - weight) + Math.cos(b) * weight
+  const y = Math.sin(a) * (1 - weight) + Math.sin(b) * weight
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
 }
 
-// ── Radar grafico ─────────────────────────────────────────────────────────
-// updateImageRawData debe ir en serie: una imagen en vuelo a la vez.
-let scopeKey = ''
-let scopeChain: Promise<unknown> = Promise.resolve()
-let scopeError: string | null = null
-let scopeDisabled = false
-
-function pushScope() {
-  if (scopeDisabled) return
-  const radar = state.radar
-  const tracks = memory.list()
-
-  if (!radar) {
-    if (scopeKey === 'empty') return
-    scopeKey = 'empty'
-    sendScope([], 0.48)
+function trackSpeed(fix: Fix) {
+  altM = typeof fix.altitudeM === 'number' ? fix.altitudeM : altM
+  if (typeof fix.headingDeg === 'number') headingDeg = fix.headingDeg
+  if (!lastFix) {
+    lastFix = { lat: fix.lat, lon: fix.lon, at: fix.updatedAt }
     return
   }
+  const dtSec = (fix.updatedAt - lastFix.at) / 1000
+  if (dtSec <= 0.5) return
+  const km = distanceKm(lastFix, fix)
+  const from = lastFix
+  lastFix = { lat: fix.lat, lon: fix.lon, at: fix.updatedAt }
 
-  const key = [
-    radar.phase,
-    radar.rangeKm.toFixed(2),
-    tracks
-      .map(t => `${t.id}:${t.distKm}:${t.bearingDeg}:${t.stale ? 1 : 0}:${t.callsign === radar.lock?.callsign ? 1 : 0}`)
-      .join('|'),
-  ].join('#')
-  if (key === scopeKey) return
-  scopeKey = key
+  const kph = (km / dtSec) * 3600
+  // Mas de 40 km/h a pie es un salto del GPS, no una carrera.
+  if (kph > 40) return
+  speedKph = speedKph === null ? kph : speedKph * 0.6 + kph * 0.4
 
-  const blips = tracks.map(t => ({
+  // Por debajo de ~3 m entre lecturas el rumbo es puro ruido del GPS.
+  if (km < 0.003) return
+  // El GPS ya manda rumbo; solo se deriva si no lo da.
+  if (typeof fix.headingDeg === 'number') return
+  const brg = bearingDeg(from, fix)
+  headingDeg = headingDeg === null ? brg : blendHeading(headingDeg, brg, 0.35)
+}
+
+// ── Pantalla AR ───────────────────────────────────────────────────────────
+// Las imagenes viajan de una en una por el enlace con el movil, asi que solo
+// se reenvian los tiles que de verdad han cambiado.
+let tileHashes: number[] = []
+let screenChain: Promise<unknown> = Promise.resolve()
+let screenDisabled = false
+
+function pushScreen(texts: HudTexts) {
+  if (screenDisabled) return
+  const radar = state.radar
+  const blips = memory.list().map(t => ({
     distKm: t.distKm,
     bearingDeg: t.bearingDeg,
     stale: t.stale,
-    locked: !!radar.lock && t.callsign === radar.lock.callsign,
+    locked: !!radar?.lock && t.callsign === radar.lock.callsign,
+    aircraft: t.aircraft,
+    callsign: t.callsign,
+    closureMps: t.closureMps,
+    altM: t.altM,
   }))
-  sendScope(blips, radar.rangeKm)
-}
 
-function sendScope(blips: Parameters<typeof renderScopePng>[0], rangeKm: number) {
-  renderScopePng(blips, rangeKm)
-    .then(bytes => {
-      scopeChain = scopeChain.then(async () => {
-        const result = await bridge.updateImageRawData(
-          new ImageRawDataUpdate({ containerID: 5, containerName: 'scope', imageData: bytes }),
-        )
-        if (result !== 'success') {
-          // El host rechazo la imagen: seguimos con el HUD de texto.
-          console.error('updateImageRawData:', result, bytes.length, 'bytes')
-          scopeError = String(result)
-          scopeDisabled = true
-          render()
-        }
-      })
-      return scopeChain
+  renderScreenTiles(
+    {
+      hud: texts,
+      radar,
+      view: state.view,
+      conn: state.conn,
+      blips,
+      speedKph,
+      headingDeg,
+      altM,
+      attitude,
+      gpsAccuracyM: state.fix?.accuracy ?? null,
+      gpsSimulated: state.fix?.simulated ?? false,
+      rangeScale: state.rangeScale,
+    },
+    tileHashes,
+  )
+    .then(({ tiles, hashes }) => {
+      tileHashes = hashes
+      for (const tile of tiles) {
+        screenChain = screenChain.then(async () => {
+          const result = await bridge.updateImageRawData(
+            new ImageRawDataUpdate({
+              containerID: tile.index + 1,
+              containerName: `scope-${tile.index}`,
+              imageData: tile.png,
+            }),
+          )
+          if (result !== 'success') {
+            console.error('updateImageRawData:', tile.index, result, tile.png.length, 'bytes')
+            screenDisabled = true
+          }
+        })
+      }
+      return screenChain
     })
     .catch(err => {
-      console.error('renderScopePng failed:', err)
-      scopeError = err instanceof Error ? err.message : String(err)
-      scopeDisabled = true
-      render()
+      console.error('renderScreenTiles failed:', err)
+      screenDisabled = true
     })
 }
 
@@ -192,11 +213,7 @@ function render() {
     tracks: memory.list(),
     gpsSimulated: state.fix?.simulated ?? false,
   })
-  push(1, 'alert', texts.alert)
-  push(2, 'info', scopeError ? `IMG\n${scopeError}` : texts.info)
-  push(3, 'detail', texts.detail)
-  push(4, 'footer', texts.footer)
-  pushScope()
+  pushScreen(texts)
 }
 
 const net = new NetClient()
@@ -233,6 +250,7 @@ const ui = mountUi({
 
 startLocation(bridge, fix => {
   state.fix = fix
+  trackSpeed(fix)
   ui.setFix(fix)
   render()
 })
@@ -240,7 +258,7 @@ startLocation(bridge, fix => {
 // El telefono manda su posicion al servidor cada 2 s.
 setInterval(() => {
   const fix = state.fix
-  if (fix && net.connected) net.sendPos(fix.lat, fix.lon)
+  if (fix && net.connected) net.sendPos(fix.lat, fix.lon, fix.altitudeM)
 }, 2000)
 
 // CLICK_EVENT es 0 y protobuf omite los campos con valor 0, asi que un tap
@@ -257,8 +275,37 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
   const sysType = eventTypeOf(event.sysEvent)
   const textType = eventTypeOf(event.textEvent)
 
+  if (sysType === OsEventTypeList.IMU_DATA_REPORT) {
+    const sample = event.sysEvent?.imuData
+    if (!sample) return
+    const at = performance.now()
+    if (at - lastImuAt < IMU_MIN_INTERVAL_MS) return
+    const next = attitudeFromImu(sample)
+    if (!next) return
+    const smoothed = smoothAttitude(attitude, next, IMU_SMOOTHING)
+    if (!attitudeChanged(attitude, smoothed, IMU_DEADBAND_DEG)) return
+    lastImuAt = at
+    attitude = smoothed
+    render()
+    return
+  }
+
   if (sysType === OsEventTypeList.DOUBLE_CLICK_EVENT || textType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
     bridge.shutDownPageContainer(1)
+    return
+  }
+
+  // Rueda: arriba acerca el radar, abajo lo aleja. Se miran los dos envelopes
+  // porque `eventTypeOf` cae a CLICK cuando un envelope existe sin tipo: con
+  // `sysType ?? textType` la rueda que llegase por el evento de texto se perdia.
+  const isScrollTop =
+    sysType === OsEventTypeList.SCROLL_TOP_EVENT || textType === OsEventTypeList.SCROLL_TOP_EVENT
+  const isScrollBottom =
+    sysType === OsEventTypeList.SCROLL_BOTTOM_EVENT ||
+    textType === OsEventTypeList.SCROLL_BOTTOM_EVENT
+  if (isScrollTop || isScrollBottom) {
+    state.rangeScale = cycleRange(state.rangeScale, isScrollTop ? 1 : -1)
+    render()
     return
   }
 

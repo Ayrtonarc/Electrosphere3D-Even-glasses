@@ -57,9 +57,12 @@ export class NetClient {
     }
   }
 
-  sendPos(lat: number, lon: number): void {
+  sendPos(lat: number, lon: number, altM?: number): void {
     if (!this.connected) return
-    this.ws!.send(JSON.stringify({ type: 'pos', lat, lon }))
+    // Sin altitud se omite el campo; el servidor lo interpreta como "no lo se".
+    const payload =
+      typeof altM === 'number' ? { type: 'pos', lat, lon, alt: altM } : { type: 'pos', lat, lon }
+    this.ws!.send(JSON.stringify(payload))
   }
 
   disconnect(): void {

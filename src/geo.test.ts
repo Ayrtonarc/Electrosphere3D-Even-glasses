@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bearingDeg, detectRangeKm, distanceKm, formatKm, offsetLatLon } from './geo'
+import { bearingDeg, detectRangeKm, deviationDeg, distanceKm, formatKm, offsetLatLon } from './geo'
 import { BASE_KM, VISUAL_RANGE_KM } from './types'
 
 const MADRID = { lat: 40.4155, lon: -3.6844 }
@@ -92,5 +92,18 @@ describe('formatKm', () => {
   it('usa kilometros con un decimal por encima', () => {
     expect(formatKm(1)).toBe('1.0 km')
     expect(formatKm(1.24)).toBe('1.2 km')
+  })
+})
+
+describe('deviationDeg', () => {
+  it('mide el desvio por el lado corto', () => {
+    expect(deviationDeg(10, 350)).toBeCloseTo(20, 6)
+    expect(deviationDeg(350, 10)).toBeCloseTo(-20, 6)
+    expect(deviationDeg(90, 90)).toBe(0)
+  })
+
+  it('satura en el lado opuesto sin dar -180', () => {
+    expect(deviationDeg(180, 0)).toBe(180)
+    expect(deviationDeg(0, 180)).toBe(180)
   })
 })
