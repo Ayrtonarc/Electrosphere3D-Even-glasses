@@ -45,6 +45,9 @@ el tráfico WebSocket.
   respecto al rumbo. Sin rumbo fiable (móvil parado, GPS sin `heading`) se
   permite 360° para que el juego siga siendo jugable.
 - **5 minutos:** al agotarse el tiempo gana quien tenga más bloqueo acumulado.
+- **Los bots también disparan:** si te acercas a menos de `bots.engageRangeM`
+  (200 m) te fijan, y al 70 % de su bloqueo el aviso pasa a `MISSILE`. Se
+  defienden apagando el radar (su alcance baja al 60 %) o cazándolos antes.
 - **Reinicio:** 12 s de marcador y empieza otra partida.
 - **Memoria de pings:** un contacto que dejas de ver no desaparece de golpe;
   queda 15 s como última posición conocida (`? Su-27 320m 8s`).
@@ -134,6 +137,23 @@ El servidor crea dos contactos para poder probar sin segunda persona:
 - `GHOST-1` (F-35) oscila entre 60 m y 400 m con periodo de 75 s: aparece,
   se desvanece al pasar de 90 m y vuelve. Es la demostración del sigilo.
 
+**Los bots también fijan.** No son decorado: si te acercas a menos de
+`bots.engageRangeM` (200 m) empiezan a bloquearte y, si te quedas quieto, te
+derriban. Lo que les frena:
+
+- **Calentamiento:** los 10 s primeros de partida están libres.
+- **Alcance corto:** el `FLANKER-1` orbita a 220 m, así que **nunca dispara**
+desde su sitio: te has de acercar tú. El fantasma sí amenaza cuando pasa cerca.
+- **Más lentos que tú:** `bots.lockMultiplier` 0,8 → el fantasma tarda 14,4 s
+  en cerrar (tú, 18 s con el F-35: llegas antes si no te distraes).
+- **Silencio:** con el radar apagado el alcance de enganche baja a un 60 %
+  (120 m), así que el margen se estrecha mucho.
+- **Si te pierden**, entran en `bots.cooldownSeconds` (15 s) de espera: no se
+  reenganchan en cuanto asomas.
+
+Con los valores por defecto, quedarse quieto acaba en derribo hacia el segundo
+73; fijar al fantasma en cuanto aparece, en victoria hacia el 18.
+
 La sala se reinicia (y los bots se re-anclan) cuando se queda vacía.
 
 ## Estructura
@@ -176,7 +196,7 @@ npm run test:watch
 | `src/reconnect.test.ts` | espera creciente con tope y ruido, `error`+`close` como un solo fallo, reinicio del historial |
 | `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
 | `src/radio.test.ts` | guion de radio (prioridades, transiciones, contactos) y huecos entre frases |
-| `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía |
+| `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía, rango, amenaza y bots que fijan |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 
 Las reglas viven en `server/rules.mjs` sin red ni relojes propios (el tiempo se
@@ -229,8 +249,11 @@ build` también comprueba los tipos de los tests.
   una y apilar a todos los jugadores en el mismo punto.
 - El bucle de render es de 1 Hz a propósito: cada actualización viaja por el
   enlace con el móvil.
-- Los bots **no te fijan**, así que el aviso de `MISSILE` y la voz de amenaza
-  solo aparecen jugando contra otra persona.
+- Cuando un bot cierra su bloqueo, la partida se cierra **después** de montar
+  los payloads: el resultado le llega al jugador un tick (1 s) más tarde. Es a
+  propósito, para que quien cierra su bloqueo en ese mismo tick gane el empate.
+- Los bots fijan con un alcance plano y sin cono de visión: a diferencia de los
+  jugadores, les da igual hacia dónde mires tú.
 - La voz depende del motor del sistema (`speechSynthesis`). En iOS necesita el
   gesto de **Conectar** para arrancar; si el móvil está en silencio, no suena.
 - Al reconectar se abre un socket nuevo y el servidor da de alta un jugador

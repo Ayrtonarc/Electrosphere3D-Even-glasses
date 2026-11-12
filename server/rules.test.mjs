@@ -466,3 +466,147 @@ describe('reglas · amenaza', () => {
     expect(radar.threat).toBeNull()
   })
 })
+
+describe('reglas · bots que fijan', () => {
+  // Con `lockMultiplier: 0.1` el F-35 del bot cierra en 1,8 s y las pruebas no
+  // dependen de la orbita del fantasma.
+  const quick = { engageRangeM: 200, lockMultiplier: 0.1, warmupSeconds: 0, cooldownSeconds: 5 }
+
+  it('durante el calentamiento no enganchan', () => {
+    const { tick, advance } = soloGame('f35', {
+      bots: { ...quick, warmupSeconds: 20 },
+    })
+    for (let i = 0; i < 10; i++) {
+      const payload = tick().payloads[0].payload
+      expect(payload.lockedBy).toBeNull()
+      expect(payload.threat).toBeNull()
+      advance(1000)
+    }
+  })
+
+  it('cuando el bot cierra, la partida se acaba y gana el bot', () => {
+    const { tick, advance } = soloGame('f35', { bots: quick })
+    let last = null
+    for (let i = 0; i < 6; i++) {
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+
+    expect(last.match.phase).toBe('finished')
+    expect(last.match.winner).toBe('GHOST-1')
+    expect(last.match.reason).toContain('bloqueo sobre')
+
+    // Los payloads se montan antes de aplicar el derribo: el resultado llega
+    // al jugador en el tick siguiente.
+    advance(1000)
+    const payload = tick().payloads[0].payload
+    expect(payload.phase).toBe('finished')
+    expect(payload.result.winner).toBe('GHOST-1')
+    expect(payload.result.rank).toBe('D') // el jugador no llego ni al 35 %
+    expect(payload.threat).toBeNull()
+  })
+
+  it('el aviso de amenaza trae el progreso del bot', () => {
+    const { tick, advance } = soloGame('f35', {
+      bots: { ...quick, lockMultiplier: 1 },
+    })
+    tick()
+    advance(1000)
+    tick()
+    advance(1000)
+    const payload = tick().payloads[0].payload
+
+    expect(payload.lockedBy).toBe('GHOST-1')
+    // 3 s de los 18 s que tarda el F-35: 16,7 % redondeado.
+    expect(payload.threat).toEqual({ callsign: 'GHOST-1', percent: 17 })
+  })
+
+  it('apagar el radar acorta el alcance al que te enganchan', () => {
+    // A los ~15 s de orbita el fantasma esta a ~177 m: dentro de los 200 m
+    // normales, fuera de los 120 m con el radar en silencio.
+    const enemyAt = emitting => {
+      const { game, tick, advance } = makeGame({
+        bots: { engageRangeM: 200, silentFactor: 0.6, lockMultiplier: 1, warmupSeconds: 0, cooldownSeconds: 30 },
+      })
+      game.join('a', { callsign: 'A', aircraft: 'f35' })
+      // De espaldas a todo: asi el jugador no fija y la partida sigue viva.
+      game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+      if (!emitting) game.setEmission('a', false)
+
+      let payload = null
+      for (let i = 0; i <= 15; i++) {
+        payload = tick().payloads[0].payload
+        advance(1000)
+      }
+      return payload
+    }
+
+    expect(enemyAt(true).lockedBy).toBe('GHOST-1')
+    expect(enemyAt(false).lockedBy).toBeNull()
+  })
+
+  it('el FLANKER-1 orbita fuera de alcance: no te caza desde lejos', () => {
+    const { tick, advance } = soloGame('su27', { bots: { ...quick, lockMultiplier: 1 } })
+    // Esta a 220 m y el alcance de enganche son 200: se le ve, pero no dispara.
+    const seen = new Set()
+    for (let i = 0; i < 8; i++) {
+      const payload = tick().payloads[0].payload
+      expect(payload.contacts.map(c => c.callsign)).toContain('FLANKER-1')
+      if (payload.lockedBy) seen.add(payload.lockedBy)
+      advance(1000)
+    }
+    expect(seen.has('FLANKER-1')).toBe(false)
+  })
+})
+
+describe('reglas · calibracion de los bots', () => {
+  it('con la configuracion real, el fantasma derriba al que se queda quieto', () => {
+    // Guarda de calibracion: si alguien toca engageRangeM, lockMultiplier o la
+    // orbita del fantasma sin mirar, esto avisa. La cuenta con los valores por
+    // defecto es: aviso a los 10 s (fin del calentamiento) y derribo al pasar
+    // cerca por segunda vez, hacia el segundo 73.
+    const { game, tick, advance } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+
+    let warned = false
+    let peak = 0
+    let finish = null
+    for (let i = 0; i < 120 && !finish; i++) {
+      // El movil manda posicion cada 2 s; sin esto el servidor lo poda a los 60.
+      if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+      const round = tick()
+      const payload = round.payloads[0]?.payload
+      if (payload?.lockedBy === 'GHOST-1') warned = true
+      if (payload?.threat) peak = Math.max(peak, payload.threat.percent)
+      if (round.match.phase === 'finished') finish = round.match
+      advance(1000)
+    }
+
+    expect(warned).toBe(true)
+    expect(peak).toBe(100)
+    expect(finish?.winner).toBe('GHOST-1')
+    expect(finish?.reason).toContain('bloqueo sobre A')
+  })
+
+  it('el jugador que fija a tiempo gana la carrera al bot', () => {
+    // Con la config real el bot necesita 10 s de calentamiento mas 14,4 s de
+    // bloqueo, y el jugador cierra el fantasma en 18 s: apurando, pero llega
+    // antes. Si alguien baja `warmupSeconds` esto empieza a fallar.
+    const { game, tick, advance } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon) // sin rumbo: cono de 360
+
+    let finish = null
+    for (let i = 0; i < 40 && !finish; i++) {
+      if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon)
+      const round = tick()
+      if (round.match.phase === 'finished') finish = round.match
+      advance(1000)
+    }
+
+    expect(finish?.winner).toBe('A')
+    expect(finish?.reason).toContain('bloqueo sobre')
+  })
+})

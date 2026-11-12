@@ -9,6 +9,13 @@
   "pingMemorySeconds": 15,
   "matchSeconds": 300,
   "matchRestartSeconds": 12,
+  "bots": {
+    "engageRangeM": 200,
+    "silentFactor": 0.6,
+    "lockMultiplier": 0.8,
+    "warmupSeconds": 10,
+    "cooldownSeconds": 15
+  },
   "serverPort": 8787,
   "maxPlayers": 8,
   "types": {
