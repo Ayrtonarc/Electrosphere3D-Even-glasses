@@ -49,26 +49,45 @@ que te guía, el compañero que bromea, el as enemigo que te insulta.
 - El motor de transiciones que ya existe no cambia: solo la tabla de guiones.
 - 5–8 frases por misión bastan para que el juego parezca escrito.
 
+En multijugador los personajes salen gratis del propio juego: **`ALA`** es el
+jugador más cercano, **`ENEMIGO`** es el que lleva la marca `AS` (o el que te
+está fijando) y el resto de frases las firma el **AWACS**, que es el único que
+puede hablarle a todos por igual.
+
 No hace falta API nueva. Es el mejor retorno por línea de código de toda la lista.
 
-### 3.2 Briefing y debriefing en el móvil — coste S
+### 3.2 Tarjeta de partida y debriefing — coste S
 
-Pantalla de misión antes de conectar (objetivo, TGT, tiempo, consejo del AWACS)
-y pantalla de resultado al terminar (rango, derribos, récord). Es la mitad de la
-sensación de campaña, y es HTML puro: cero riesgo.
+Aquí no hay briefing por jugador: la partida es la misma para los ocho. Lo que
+falta es una **tarjeta de partida** compartida en los 12 s de reinicio —nombre
+del escenario, objetivo, cuenta atrás— y un debriefing al terminar (rango,
+derribos, récord).
 
-### 3.3 Objetivos de misión — coste M
+De paso arregla un problema actual: ahora mismo el marcador aparece y la partida
+siguiente empieza sin explicar nada. Un cartel de 3 s convierte ese salto en una
+transición.
 
-Hoy es una partida de 5 minutos en bucle, sin objetivo. Ace Combat es «haz esto
-y vuelve».
+### 3.3 Escenarios de partida — coste M
 
-- `mission.mjs`: objetivos primarios (`TGT`) y secundarios (`SEC`) con
-  condiciones: derribar N, sobrevivir T segundos, mantener distancia, escoltar.
-- Fases: `briefing → flying → accomplished | failed`.
-- HUD: rombo para TGT, cuadrado para SEC; fuera de pantalla, flecha grande con
-  distancia.
-- El progreso lo decide el servidor, igual que la visibilidad: el cliente no
-  puede falsear un objetivo cumplido.
+**No hay campaña.** En un PvP de 8 personas una historia scriptada no se puede
+contar: cada partida la escriben los jugadores. Lo que sí falta es **un motivo
+para la ronda** más allá del cronómetro. La misión de Ace Combat se traduce a
+*modo de juego*, y el motor que hace falta ya está: visibilidad, cono, bloqueo y
+rango.
+
+| Escenario | Regla | Qué añade |
+|---|---|---|
+| `duel` | Gana quien cierra el primer bloqueo (lo de ahora) | El duelo puro |
+| `sector` | Un círculo de 80 m que se mueve cada 90 s; gana quien sume 60 s dentro | Entrar en el sector te expone: objetivo y riesgo en el mismo sitio |
+| `ace` | Un jugador lleva la marca `AS` (RCS ×4, visible desde lejos); gana quien lo fija, él gana si sobrevive | El as con nombre de Ace Combat, pero **humano**: el que va primero |
+
+`ace` es la pieza más interesante: el villano de la partida es una persona, y
+como cambia de ronda en ronda, la rivalidad sale sola. «Otra vez el mismo» vale
+más que cualquier guion.
+
+Coste real: `sector` es trigonometría de una zona (30 líneas y tests); `ace` es
+un multiplicador de RCS por jugador (20 líneas). El resto —anuncio, marcador,
+rango— ya existe.
 
 ### 3.4 Armas de verdad: munición y evasión — coste L, cambia el meta
 
@@ -110,6 +129,9 @@ tercer perfil desbloqueable. Sin economía: nadie quiere grind en unas gafas.
 - **Superponer cajas a aviones reales:** no hay cámara.
 - **Cinemáticas y música orquestal:** no hay color, ni profundidad, ni assets.
 - **Mundo abierto:** 258 m de radar y GPS a pie.
+- **Campaña con historia y briefings:** es multijugador. No se puede contar una
+  historia a ocho personas que juegan a la vez y en distinto orden; lo que se
+  comparte es el escenario de la ronda, no el guion.
 
 ## 5. Orden recomendado: tres entregas
 
@@ -118,23 +140,26 @@ Elenco de radio con personajes, briefing y debriefing en el móvil, tonos y
 vibración. No se toca la física: se toca cómo se cuenta. Aquí está el grueso de
 la sensación y cuesta poco.
 
-**Entrega 2 — «hay una misión»** (coste M).
-Objetivos TGT/SEC con estados, HUD de objetivo y marcador de fin de misión.
-Convierte el bucle infinito en una campaña de tres misiones.
+**Entrega 2 — «cada ronda tiene motivo»** (coste M).
+Tarjeta de partida compartida, escenarios `sector` y `ace` con su marcador, y
+debriefing con rango y récord. Convierte el bucle infinito en un ciclo de
+rondas con objetivo, sin inventar ninguna historia.
 
 **Entrega 3 — «hay que ganárselo»** (coste L).
 Misiles con munición y evasión, más el as enemigo. Cambia el meta del juego.
 
 ## 6. Idea diferencial: misiones ancladas en tu barrio
 
-Los bots ya orbitan un ancla real: la primera posición GPS. Si los objetivos se
-generan a partir de coordenadas reales (una plaza, una esquina, un parque a
-150–300 m), la misión se juega **andando por tu calle**, y el cono de visión
-obliga a girarte físicamente para cubrir el sector. Eso no lo puede hacer ningún
-juego de móvil y es la única razón por la que este juego necesita unas gafas.
+Los bots ya orbitan un ancla real: la primera posición GPS. Si el escenario
+`sector` mueve su círculo entre coordenadas reales (una plaza, una esquina, un
+parque a 150–300 m), la ronda se juega **andando por tu calle**, y el cono de
+visión obliga a girarte físicamente para cubrir el sector. Eso no lo puede hacer
+ningún juego de móvil y es la única razón por la que este juego necesita unas
+gafas.
 
 Riesgos: seguridad (no mandar a nadie a cruzar calles) y batería. Mitigación:
-objetivos siempre dentro de un radio corto y un botón de «cancelar misión».
+el círculo siempre dentro de un radio corto del ancla y un botón de «salir de la
+ronda».
 
 ## 7. Restricciones de plataforma (recordatorio)
 
