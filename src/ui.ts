@@ -557,7 +557,8 @@ export function mountUi(handlers: UiHandlers): Ui {
 
     const score = document.createElement('div')
     score.className = 'score'
-    score.textContent = `${radar.you.score ?? 0} pts · ${radar.you.kills ?? 0} derribos · ${radar.you.deaths ?? 0} bajas`
+    const aceTag = radar.you.ace ? ' · AS' : ''
+    score.textContent = `${radar.you.score ?? 0} pts${aceTag} · ${radar.you.kills ?? 0} derribos · ${radar.you.deaths ?? 0} bajas`
     objectivesEl.appendChild(score)
 
     for (const objective of radar.objectives ?? []) {
@@ -633,11 +634,12 @@ export function mountUi(handlers: UiHandlers): Ui {
       const li = document.createElement('li')
       li.className = 'contact'
       if (track.stale) li.classList.add('is-stale')
+      if (track.ace) li.classList.add('is-ace')
       if (lockedCallsign && track.callsign === lockedCallsign) li.classList.add('is-locked')
 
       const arrow = document.createElement('span')
       arrow.className = 'arrow'
-      arrow.textContent = track.stale ? '?' : arrowFor(track.bearingDeg)
+      arrow.textContent = track.stale ? '?' : track.ace ? 'AS' : arrowFor(track.bearingDeg)
 
       const name = document.createElement('span')
       name.className = 'name'

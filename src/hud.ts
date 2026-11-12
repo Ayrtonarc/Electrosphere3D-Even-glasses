@@ -92,7 +92,13 @@ function contactLine(track: TrackedContact, lockedCallsign: string | null): stri
   if (track.stale) {
     return `? ${name} ${compactKm(track.distKm)} ${Math.round(track.ageMs / 1000)}s`
   }
-  const marker = lockedCallsign && track.callsign === lockedCallsign ? '*' : arrowFor(track.bearingDeg)
+  // El as se marca con A en vez de con la flecha: es el unico contacto que
+  // conviene distinguir de un vistazo.
+  const marker = lockedCallsign && track.callsign === lockedCallsign
+    ? '*'
+    : track.ace
+      ? 'A'
+      : arrowFor(track.bearingDeg)
   return `${marker} ${name} ${compactKm(track.distKm)} ${String(Math.round(track.bearingDeg)).padStart(3, '0')}°`
 }
 
@@ -119,6 +125,8 @@ export function renderHud(input: HudInput): HudTexts {
   const downMs = radar?.you.downMs ?? 0
   const points = radar?.you.score ?? 0
   const primary = radar?.objectives?.find(o => o.kind === 'primary') ?? null
+  /** Llevar la marca de as se ve en la ficha de abajo a la izquierda. */
+  const aceTag = radar?.you.ace ? ' AS' : ''
 
   /**
    * Flecha hacia la amenaza. Con rumbo conocido es relativa a tu morro (↑ = de
@@ -174,7 +182,7 @@ export function renderHud(input: HudInput): HudTexts {
     if (round !== null && scenario) lines.push(`RONDA ${round} · ${scenario.name.toUpperCase()}`)
     lines.push('', 'Nueva partida', 'en unos segundos')
     detail = lines.join('\n')
-    info = `${me.name}\nR ${formatKm(rangeKm)}`
+    info = `${me.name}${aceTag}\nR ${formatKm(rangeKm)}`
     footer = `Nueva partida en ${Math.ceil(remainingMs / 1000)} s`
   } else if (view === 'info') {
     // Misma fuente que la ficha del movil: si cambia la formula, cambian las dos.
@@ -187,7 +195,7 @@ export function renderHud(input: HudInput): HudTexts {
       ...(special ? [`SPW ${special.name}`] : []),
       gpsSimulated ? 'GPS simulado' : 'GPS activo',
     ].join('\n')
-    info = `${me.name}\nR ${range}`
+    info = `${me.name}${aceTag}\nR ${range}`
     footer = `${clock(remainingMs)} · 2v: alcance · TAP: radar`
   } else {
     const lines: string[] = []
@@ -201,7 +209,7 @@ export function renderHud(input: HudInput): HudTexts {
     }
 
     detail = lines.length ? lines.join('\n') : 'SIN CONTACTOS\n\nMuevete para barrer.'
-    info = `${me.name}\nR ${formatKm(rangeKm)}`
+    info = `${me.name}${aceTag}\nR ${formatKm(rangeKm)}`
     footer = `${clock(remainingMs)} · ${points} PTS · 2v: blanco`
   }
 

@@ -769,3 +769,72 @@ describe('reglas · armas especiales', () => {
     expect(scores[1]).toBe(50) // la segunda ya cuesta 50
   })
 })
+
+describe('reglas · el as', () => {
+  const passive = { engageRangeM: 1, lockMultiplier: 1, warmupSeconds: 0, cooldownSeconds: 0 }
+
+  it('el que lidera el marcador lleva la marca', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.join('b', { callsign: 'B', aircraft: 'su27' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon)
+
+    // Sin puntos no hay as: nadie ha hecho nada.
+    const antes = tick().payloads
+    expect(antes.find(p => p.id === 'a').payload.leader).toBeNull()
+    expect(antes.find(p => p.id === 'a').payload.you.ace).toBe(false)
+
+    game.players.get('b').score = 500
+    const despues = tick().payloads
+    const a = despues.find(p => p.id === 'a').payload
+    expect(a.leader).toEqual({ callsign: 'B', score: 500 })
+    expect(a.you.ace).toBe(false)
+    expect(a.contacts.find(c => c.callsign === 'B').ace).toBe(true)
+    // Y el propio as lo sabe: lleva la marca, y eso le avisa.
+    expect(despues.find(p => p.id === 'b').payload.you.ace).toBe(true)
+  })
+
+  it('al as se le ve desde mas lejos', () => {
+    const { game, tick } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.join('b', { callsign: 'B', aircraft: 'su27' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    game.setPosition('b', MADRID.lat + 0.0054, MADRID.lon) // ~600 m
+
+    // Un Su-27 normal se ve a 480 m, o sea que a 600 no aparece.
+    const normal = tick().payloads.find(p => p.id === 'a').payload
+    expect(normal.contacts.map(c => c.callsign)).not.toContain('B')
+
+    // Con la marca de as, su firma x4 lo pone a tiro de radar (679 m).
+    game.players.get('b').score = 500
+    const asAce = tick().payloads.find(p => p.id === 'a').payload
+    expect(asAce.contacts.map(c => c.callsign)).toContain('B')
+  })
+
+  it('derribar al as paga recompensa', () => {
+    const { game, tick, advance } = makeGame({ bots: passive })
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    // F-16 y no Su-27: el R-73 del Su-27 no tiene cono, asi que de espaldas
+    // tambien te fija y este test acabaria con A derribado.
+    game.join('b', { callsign: 'B', aircraft: 'f16' })
+    game.setPosition('a', MADRID.lat, MADRID.lon) // sin rumbo: cono de 360
+    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon, null, 0) // de espaldas
+
+    tick() // arranca la ronda (y reinicia los marcadores)
+    game.players.get('b').score = 500
+
+    let payload = null
+    for (let i = 0; i < 25; i++) {
+      game.setPosition('a', MADRID.lat, MADRID.lon)
+      game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon, null, 0)
+      payload = tick().payloads.find(p => p.id === 'a').payload
+      if (payload.you.kills > 0) break
+      advance(1000)
+    }
+
+    expect(payload.you.kills).toBe(1)
+    // 250 de recompensa, no los 100 de un derribo normal.
+    expect(payload.you.score).toBe(250)
+  })
+})

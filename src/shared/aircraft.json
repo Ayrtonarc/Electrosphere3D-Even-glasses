@@ -15,6 +15,7 @@
     "rule": "Gana quien mas puntos sume en 5 minutos"
   },
   "points": { "kill": 100, "death": 50 },
+  "ace": { "rcsMultiplier": 4, "bounty": 250 },
   "respawnSeconds": 10,
   "botDownSeconds": 30,
   "objectives": [

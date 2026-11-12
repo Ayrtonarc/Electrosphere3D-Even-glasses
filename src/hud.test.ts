@@ -392,3 +392,32 @@ describe('renderHud · marcador y objetivos', () => {
     expect(hud.alert).toBe('!! MISSILE · GHOST-1')
   })
 })
+
+describe('renderHud · el as', () => {
+  const you = { callsign: 'VIPER-1', aircraft: 'f35' as const, lat: 0, lon: 0 }
+
+  it('marca al as con A en vez de la flecha', () => {
+    const hud = renderHud(input({ tracks: [track({ ace: true, distKm: 0.22, bearingDeg: 90 })] }))
+    expect(hud.detail).toContain('A Su-27 220m 090°')
+  })
+
+  it('el blanco fijado manda sobre la marca de as', () => {
+    const hud = renderHud(
+      input({
+        tracks: [track({ ace: true, callsign: 'FLANKER-1' })],
+        radar: radar({ lock: { callsign: 'FLANKER-1', aircraft: 'su27', ms: 2000, needMs: 18000 } }),
+      }),
+    )
+    expect(hud.detail).toContain('* Su-27')
+  })
+
+  it('si eres el as lo dice en tu ficha', () => {
+    const hud = renderHud(input({ radar: radar({ you: { ...you, ace: true } }) }))
+    expect(hud.info).toBe('F-35 AS\nR 480 m')
+  })
+
+  it('sin marca, la ficha queda como estaba', () => {
+    const hud = renderHud(input({ radar: radar({ you }) }))
+    expect(hud.info).toBe('F-35\nR 480 m')
+  })
+})

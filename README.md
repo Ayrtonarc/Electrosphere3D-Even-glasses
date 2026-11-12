@@ -63,6 +63,9 @@ el tráfico WebSocket.
   menos de `lock.rangeM` (250 m) y dentro de un cono de `lock.fovDeg` (90°)
   respecto al rumbo. Sin rumbo fiable (móvil parado, GPS sin `heading`) se
   permite 360° para que el juego siga siendo jugable.
+- **El as:** el que lidera el marcador lleva la marca `AS`. Se le ve desde más
+  lejos (su firma radar ×4) y derribarlo paga `250` en vez de `100`. No es un
+  personaje: es el jugador que va primero, así que rota solo.
 - **Los bots también disparan:** si te acercas a menos de `bots.engageRangeM`
   (200 m) te fijan, y al 70 % de su bloqueo el aviso pasa a `MISSILE` con la
   flecha de por dónde viene. Se defienden apagando el radar (su alcance baja al
@@ -131,7 +134,8 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
 - **Contactos:** cada enemigo con la **silueta de su caza** (F-35 corto y ancho,
   Su-27 largo y estrecho), indicativo, distancia y **tasa de cierre**
   (`▼` se acerca, `▲` se aleja). Los que quedan fuera de la escala elegida
-  aparecen como flecha en el borde con su distancia real.
+  aparecen como flecha en el borde con su distancia real. **El as lleva `A` en
+  vez de la flecha**, y si eres tú, tu ficha dice `F-35 AS`.
 - **Blanco fijado:** corchetes con el progreso de bloqueo en arco, la distancia,
   el cierre y la **altitud relativa** (`A+12m`).
 - **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN ← · X`,

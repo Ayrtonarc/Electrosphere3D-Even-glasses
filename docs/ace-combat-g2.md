@@ -113,11 +113,20 @@ Hoy, llegar al 100 % de bloqueo gana al instante. En Ace Combat el bloqueo
 - Stinger de derribo y de victoria, y **vibración** en el móvil.
 - Ojo: el G2 no tiene altavoz. Suena en el móvil o en auriculares.
 
-### 3.6 El as enemigo — coste M-L
+### 3.6 El as — coste M, hecho
 
-Un bot con nombre propio que juega distinto: te sigue, **apaga su radar** para
-romper tu bloqueo (el concepto ya existe) y reaparece a mitad de misión. Barra
-de daño en el HUD y una frase propia al entrar en el sector.
+El villano de Ace Combat, pero humano: **el que lidera el marcador**. No hay
+que escribirle una personalidad, rota solo y la rivalidad la ponen los
+jugadores.
+
+- Lleva la marca `AS` en el HUD y en el móvil.
+- Se le ve desde más lejos: su firma radar se multiplica por cuatro, así que
+  aparece en radares ajenos antes que nadie.
+- Derribarlo paga `250` en vez de `100`, para que ir primero sea una
+  responsabilidad y no un paseo.
+
+Falta la parte visual en el radar gráfico de las gafas (el MFD): hoy se marca
+en la lista de contactos y en la ficha, no en el dibujo.
 
 ### 3.7 Progresión — coste S si es local, M si es de servidor
 

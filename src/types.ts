@@ -66,6 +66,8 @@ export interface Contact {
   altM?: number
   /** false si lleva el radar apagado (mas dificil de detectar). */
   emitting?: boolean
+  /** true si es el as de la ronda: el que lidera el marcador. */
+  ace?: boolean
 }
 
 export type MatchPhase = 'flying' | 'finished'
@@ -142,6 +144,8 @@ export interface RadarState {
     deaths?: number
     /** Milisegundos fuera de juego tras ser derribado; 0 si estas en vuelo. */
     downMs?: number
+    /** true si llevas la marca de as. */
+    ace?: boolean
   }
   /** Objetivos de la ronda con su progreso. */
   objectives?: Objective[]

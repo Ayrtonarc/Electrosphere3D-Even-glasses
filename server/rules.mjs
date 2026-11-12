@@ -123,6 +123,15 @@ export function createRules(cfg) {
   // La ronda no termina con el primer derribo: es una carrera de puntos. El
   // derribo suma, morir resta, y los objetivos pagan bonus una sola vez.
   const POINTS = { kill: cfg.points?.kill ?? 100, death: cfg.points?.death ?? 50 }
+
+  // ── El as ───────────────────────────────────────────────────────────────
+  // El as no es un personaje: es el jugador que va primero en el marcador. Se
+  // le ve desde mas lejos (firma mas grande) y derribarlo paga recompensa, para
+  // que ir primero sea una responsabilidad y no un paseo.
+  const ACE = {
+    rcsMultiplier: cfg.ace?.rcsMultiplier ?? 4,
+    bounty: cfg.ace?.bounty ?? 250,
+  }
   /** Tiempo fuera de juego tras ser derribado. */
   const RESPAWN_MS = (cfg.respawnSeconds ?? 10) * 1000
   /** Los bots no mueren: se retiran un rato para que no se puedan farmear. */
@@ -144,12 +153,12 @@ export function createRules(cfg) {
   const emissionFactor = p => (p.emitting === false ? SILENT_FACTOR : 1)
 
   /** Alcance de deteccion con suelo visual: nadie es invisible a menos de VISUAL_KM. */
-  const detectKm = (observer, target) =>
+  const detectKm = (observer, target, rcsScale = 1) =>
     Math.max(
       VISUAL_KM,
       BASE_KM *
         radarOf(observer.aircraft) *
-        Math.pow(Math.max(rcsOf(target.aircraft), 1e-6), 0.25) *
+        Math.pow(Math.max(rcsOf(target.aircraft) * rcsScale, 1e-6), 0.25) *
         emissionFactor(observer) *
         emissionFactor(target),
     )
@@ -196,8 +205,8 @@ export function createRules(cfg) {
     }
 
     /** Un derribo: cobra el atacante y saca al blanco de la ronda un rato. */
-    function awardKill(killer, contact, at) {
-      killer.score += POINTS.kill
+    function awardKill(killer, contact, at, aceTarget = false) {
+      killer.score += aceTarget ? ACE.bounty : POINTS.kill
       killer.kills += 1
       killer.lock = { id: null, ms: 0 }
 
@@ -469,10 +478,19 @@ export function createRules(cfg) {
       // Los derribados siguen viendo el radar, pero no son objetivo de nadie ni
       // pueden fijar hasta que se recuperan.
       const alive = humans.filter(p => at >= (p.downUntil ?? 0))
+
+      // El as: el que lidera el marcador. Rota solo, segun se juega.
+      const leader = humans.slice().sort((a, b) => b.score - a.score)[0]
+      const topScore = leader?.score ?? 0
+      const aceId = topScore > 0 ? leader.id : null
+      const isAce = t => aceId !== null && t.id === aceId
+      const leaderPayload = topScore > 0 ? { callsign: leader.callsign, score: topScore } : null
+
       bots = botsAt(anchor, (at - anchorAt) / 1000).filter(b => at >= (botDown.get(b.callsign) ?? 0))
 
       const targets = [...alive, ...bots]
-      const maxRcs = targets.reduce((acc, t) => Math.max(acc, rcsOf(t.aircraft)), 1e-6)
+      const rcsScale = t => (isAce(t) ? ACE.rcsMultiplier : 1)
+      const maxRcs = targets.reduce((acc, t) => Math.max(acc, rcsOf(t.aircraft) * rcsScale(t)), 1e-6)
 
       if (match.endsAt === 0) {
         if (humans.length > 0) startMatch(at)
@@ -488,10 +506,6 @@ export function createRules(cfg) {
 
       updateBots(bots, alive, at)
 
-      const leader = humans.slice().sort((a, b) => b.score - a.score)[0]
-      const topScore = leader?.score ?? 0
-      const leaderPayload = topScore > 0 ? { callsign: leader.callsign, score: topScore } : null
-
       const payloads = []
 
       for (const me of humans) {
@@ -499,7 +513,8 @@ export function createRules(cfg) {
         for (const other of targets) {
           if (other === me) continue
           const distKm = distanceKm(me, other)
-          if (distKm > detectKm(me, other)) continue
+          // Al as se le ve desde mas lejos: es el precio de ir primero.
+          if (distKm > detectKm(me, other, rcsScale(other))) continue
           contacts.push({
             id: other.id,
             callsign: other.callsign,
@@ -509,6 +524,7 @@ export function createRules(cfg) {
             kind: other.kind ?? 'human',
             visual: distKm <= lockRangeKmOf(me.aircraft) && inCone(me, other),
             emitting: other.emitting !== false,
+            ...(isAce(other) ? { ace: true } : {}),
             ...(typeof other.altM === 'number' ? { altM: Math.round(other.altM) } : {}),
           })
         }
@@ -557,7 +573,7 @@ export function createRules(cfg) {
             me.targets.add(target.id)
             lock = { callsign: target.callsign, aircraft: target.aircraft, ms: me.lock.ms, needMs }
             // El derribo cobra y sigue la ronda: esto es una carrera de puntos.
-            if (me.lock.ms >= needMs) awardKill(me, target, at)
+            if (me.lock.ms >= needMs) awardKill(me, target, at, isAce(target))
           }
 
           payObjectives(me, false)
@@ -624,6 +640,8 @@ export function createRules(cfg) {
               deaths: me.deaths,
               /** Milisegundos que le quedan fuera de juego; 0 si esta en vuelo. */
               downMs: Math.max(0, (me.downUntil ?? 0) - at),
+              /** true si lleva la marca de as de la ronda. */
+              ace: isAce(me),
             },
             objectives: objectivesFor(me),
             leader: leaderPayload,
