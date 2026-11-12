@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
+import { aircraftSpecial, aircraftStats, aircraftTitle, comparisonRows } from './stats'
 import { AIRCRAFT } from './types'
 import { detectRangeKm } from './geo'
 
@@ -65,5 +65,27 @@ describe('aircraftSpecial', () => {
   it('el F-16 y el MiG-29 completan la tabla', () => {
     expect(aircraftStats('f16').map(s => s.value)).toEqual(['5 m²', '336 m', '13 s', '386 m'])
     expect(aircraftStats('mig29').map(s => s.value)).toEqual(['7 m²', '384 m', '15 s', '420 m'])
+  })
+})
+
+describe('comparisonRows', () => {
+  it('una fila por avión, con las mismas cifras que la ficha', () => {
+    const rows = comparisonRows()
+    expect(rows).toHaveLength(Object.keys(AIRCRAFT).length)
+
+    const f35 = rows.find(r => r.id === 'f35')
+    expect(f35?.name).toBe('F-35')
+    expect(f35?.stats).toEqual(aircraftStats('f35'))
+    expect(f35?.special).toBe('QAAM')
+  })
+
+  it('todas las filas tienen las mismas columnas', () => {
+    const rows = comparisonRows()
+    const columns = rows[0].stats.map(s => s.id)
+    for (const row of rows) expect(row.stats.map(s => s.id)).toEqual(columns)
+  })
+
+  it('ningún avión se queda sin arma en la tabla', () => {
+    expect(comparisonRows().every(r => r.special !== '—')).toBe(true)
   })
 })

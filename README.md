@@ -164,8 +164,9 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
 - **Pulsación larga:** enciende o apaga el radar (modo silencio).
 - **Doble tap:** sale.
 - **Companion:** **hangar** con pestañas por avión y ficha grande del elegido
-  (arma especial, RCS, alcance, tiempo de fijado y a qué distancia te ven),
-  indicativo, estado de conexión y un radar en canvas.
+  (arma especial, RCS, alcance, tiempo de fijado y a qué distancia te ven), un
+  botón **Comparar** que despliega los cuatro en una tabla, indicativo, estado
+  de conexión y un radar en canvas.
 
 ## Bots
 

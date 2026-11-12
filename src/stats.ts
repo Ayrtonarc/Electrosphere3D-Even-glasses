@@ -56,3 +56,21 @@ export function aircraftStats(id: AircraftId): Stat[] {
     { id: 'seen', label: 'Te ven a', value: formatKm(seenKm) },
   ]
 }
+
+/** Una fila del comparador: el nombre, sus cuatro cifras y su arma. */
+export interface ComparisonRow {
+  id: AircraftId
+  name: string
+  stats: Stat[]
+  special: string
+}
+
+/** Todos los aviones del catalogo, en el orden en que se declaran. */
+export function comparisonRows(): ComparisonRow[] {
+  return (Object.keys(AIRCRAFT) as AircraftId[]).map(id => ({
+    id,
+    name: AIRCRAFT[id].name,
+    stats: aircraftStats(id),
+    special: aircraftSpecial(id)?.name ?? '—',
+  }))
+}

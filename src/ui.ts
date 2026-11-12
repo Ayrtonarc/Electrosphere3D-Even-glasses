@@ -18,7 +18,7 @@ import {
   type PlayerRecord,
   type StorageLike,
 } from './record'
-import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
+import { aircraftSpecial, aircraftStats, aircraftTitle, comparisonRows } from './stats'
 import { browserStorage } from './storage'
 import { completeTutorial, shouldShowTutorial, STEPS, type TutorialStep } from './onboarding'
 
@@ -141,6 +141,8 @@ export function mountUi(handlers: UiHandlers): Ui {
   const serverEl = $<HTMLInputElement>('#server')
   const tabsEl = $<HTMLDivElement>('#tabs')
   const sheetEl = $<HTMLElement>('#sheet')
+  const compareEl = $<HTMLButtonElement>('#compare')
+  const compareTableEl = $<HTMLDivElement>('#compare-table')
   const connectEl = $<HTMLButtonElement>('#connect')
   const disconnectEl = $<HTMLButtonElement>('#disconnect')
   const linkEl = $<HTMLSpanElement>('#link')
@@ -218,6 +220,10 @@ export function mountUi(handlers: UiHandlers): Ui {
       tab.setAttribute('aria-pressed', String(active))
     }
 
+    for (const row of compareTableEl.querySelectorAll<HTMLTableRowElement>('tbody tr')) {
+      row.classList.toggle('is-active', row.dataset.id === aircraft)
+    }
+
     const profile = AIRCRAFT[aircraft]
     const special = aircraftSpecial(aircraft)
 
@@ -272,7 +278,64 @@ export function mountUi(handlers: UiHandlers): Ui {
     sheetEl.replaceChildren(...parts)
   }
 
+  /**
+   * Comparador: los cuatro de golpe. Ir pestana a pestana para decidir entre
+   * cuatro cifras es justo lo que este menu venia a arreglar.
+   */
+  function buildComparison() {
+    const rows = comparisonRows()
+    if (rows.length === 0) return
+
+    const table = document.createElement('table')
+
+    const head = document.createElement('tr')
+    for (const label of ['Avion', ...rows[0].stats.map(s => s.label), 'Arma']) {
+      const th = document.createElement('th')
+      th.scope = 'col'
+      th.textContent = label
+      head.appendChild(th)
+    }
+    const thead = document.createElement('thead')
+    thead.appendChild(head)
+
+    const tbody = document.createElement('tbody')
+    for (const row of rows) {
+      const tr = document.createElement('tr')
+      tr.dataset.id = row.id
+      tr.addEventListener('click', () => selectAircraft(row.id))
+
+      const name = document.createElement('th')
+      name.scope = 'row'
+      name.textContent = row.name
+      tr.appendChild(name)
+
+      for (const stat of row.stats) {
+        const td = document.createElement('td')
+        td.textContent = stat.value
+        tr.appendChild(td)
+      }
+
+      const special = document.createElement('td')
+      special.textContent = row.special
+      tr.appendChild(special)
+
+      tbody.appendChild(tr)
+    }
+
+    table.append(thead, tbody)
+    compareTableEl.replaceChildren(table)
+  }
+
+  compareEl.addEventListener('click', () => {
+    const open = compareTableEl.hidden
+    compareTableEl.hidden = !open
+    compareEl.textContent = open ? 'Ocultar' : 'Comparar'
+    compareEl.setAttribute('aria-expanded', String(open))
+    if (open) renderHangar()
+  })
+
   buildTabs()
+  buildComparison()
   renderHangar()
 
   /**

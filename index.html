@@ -362,6 +362,32 @@
         letter-spacing: 0.06em;
       }
 
+      /* ── Comparador de aviones ─────────────────────────────── */
+      .hangar .linkish { align-self: flex-end; }
+      .compare { overflow-x: auto; }
+      .compare table { width: 100%; border-collapse: collapse; font-size: 10px; }
+      .compare th,
+      .compare td { padding: 5px 4px; text-align: right; white-space: nowrap; }
+      .compare thead th {
+        color: var(--muted);
+        font-weight: 500;
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--line);
+      }
+      .compare tbody th {
+        text-align: left;
+        color: var(--text);
+        font-weight: 600;
+        font-size: 11px;
+      }
+      .compare td { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .compare tbody tr { border-bottom: 1px solid #2c2c2c; cursor: pointer; }
+      .compare tbody tr.is-active { background: #263329; }
+      .compare tbody tr.is-active th,
+      .compare tbody tr.is-active td { color: var(--accent); }
+
       .advanced { border-top: 1px solid var(--line); padding-top: 10px; }
       .advanced summary {
         font-size: 11px;
@@ -526,6 +552,8 @@
             <div id="aircraft" class="hangar">
               <div id="tabs" class="tabs" role="group" aria-label="Elegir aeronave"></div>
               <div id="sheet" class="sheet"></div>
+              <button id="compare" class="linkish" type="button" aria-expanded="false" aria-controls="compare-table">Comparar</button>
+              <div id="compare-table" class="compare" hidden></div>
             </div>
           </section>
 
