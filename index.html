@@ -137,6 +137,13 @@
         border-radius: 999px;
         padding: 4px 10px;
       }
+      /* Misil encima: mismo aviso, pero sin duda de que hay que romper. */
+      .warn.is-missile {
+        color: #1a1010;
+        background: var(--danger);
+        border-color: var(--danger);
+        font-weight: 700;
+      }
 
       canvas#radar {
         width: 100%;
@@ -194,10 +201,13 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        flex-wrap: wrap;
         gap: 10px;
       }
       .gps { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
       .gps.is-warn { color: var(--warn); }
+      .footbtns { display: flex; gap: 8px; }
+      button.ghost.is-off { color: var(--muted); border-style: dashed; }
 
       /* ── Lobby ────────────────────────────────────────────────── */
       .field { display: flex; flex-direction: column; gap: 6px; }
@@ -318,7 +328,10 @@
 
           <div class="flightfoot">
             <span id="gps" class="gps">GPS listo</span>
-            <button id="disconnect" class="ghost" type="button">Desconectar</button>
+            <div class="footbtns">
+              <button id="radio" class="ghost" type="button">Radio ON</button>
+              <button id="disconnect" class="ghost" type="button">Desconectar</button>
+            </div>
           </div>
         </section>
 

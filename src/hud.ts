@@ -40,6 +40,13 @@ export function compactKm(km: number): string {
   return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`
 }
 
+/**
+ * A partir de este progreso del que te fija, el aviso deja de ser "te
+ * bloquean" y pasa a ser "MISSILE": a falta de un tercio, ya no da tiempo a
+ * nada que no sea romper el contacto.
+ */
+export const MISSILE_PERCENT = 70
+
 export interface HudInput {
   view: 'radar' | 'info'
   callsign: string
@@ -94,7 +101,10 @@ export function renderHud(input: HudInput): HudTexts {
   const phase = radar?.phase ?? 'flying'
   const lock = radar?.lock ?? null
   const lockedBy = radar?.lockedBy ?? null
+  const threat = radar?.threat ?? null
+  const missile = threat && threat.percent >= MISSILE_PERCENT ? threat : null
   const winner = radar?.result?.winner ?? null
+  const rank = radar?.result?.rank ?? null
   const remainingMs = radar?.remainingMs ?? 0
   const rangeKm = radar?.rangeKm ?? 0
   const offline = conn !== 'open'
@@ -108,7 +118,10 @@ export function renderHud(input: HudInput): HudTexts {
   if (offline) {
     alert = connectionAlert(conn, connDetail)
   } else if (phase === 'finished') {
-    alert = winner ? (winner === callsign ? 'VICTORIA' : `GANA ${winner}`) : 'EMPATE'
+    const suffix = rank ? ` · ${rank}` : ''
+    alert = winner ? (winner === callsign ? `VICTORIA${suffix}` : `GANA ${winner}`) : `EMPATE${suffix}`
+  } else if (missile) {
+    alert = `!! MISSILE · ${missile.callsign}`
   } else if (lockedBy) {
     alert = `!! TE BLOQUEAN · ${lockedBy}`
   } else if (nearest && nearest.distKm <= threatKm) {
@@ -130,12 +143,12 @@ export function renderHud(input: HudInput): HudTexts {
     info = me.name
     footer = 'TAP: info · 2x: salir'
   } else if (phase === 'finished') {
-    detail = [
+    const lines = [
       winner ? (winner === callsign ? 'BLANCO DERRIBADO' : `GANADOR: ${winner}`) : 'NADIE GANA',
-      '',
-      'Nueva partida',
-      'en unos segundos',
-    ].join('\n')
+    ]
+    if (rank) lines.push(`RANGO ${rank} · ${radar?.result?.score ?? 0}%`)
+    lines.push('', 'Nueva partida', 'en unos segundos')
+    detail = lines.join('\n')
     info = `${me.name}\nR ${formatKm(rangeKm)}`
     footer = `Nueva partida en ${Math.ceil(remainingMs / 1000)} s`
   } else if (view === 'info') {

@@ -46,6 +46,9 @@ export interface Contact {
 
 export type MatchPhase = 'flying' | 'finished'
 
+/** Nota arcade de la partida. S derribo, A victoria por tiempo, B/C/D el resto. */
+export type Rank = 'S' | 'A' | 'B' | 'C' | 'D'
+
 /** Progreso de bloqueo del jugador sobre su contacto mas cercano. */
 export interface LockState {
   callsign: string
@@ -57,6 +60,17 @@ export interface LockState {
 export interface MatchResult {
   winner: string | null
   reason: string
+  /** Rango propio; el servidor lo manda ya calculado para cada jugador. */
+  rank?: Rank
+  /** Mejor bloqueo de la partida en porcentaje del necesario (0..100). */
+  score?: number
+}
+
+/** Quien te esta fijando y cuanto le falta. */
+export interface Threat {
+  callsign: string
+  /** Progreso de su bloqueo sobre ti, 0..100. */
+  percent: number
 }
 
 /** Estado del radar propio. El servidor decide que ves: el sigilo no se puede falsear. */
@@ -81,6 +95,8 @@ export interface RadarState {
   lock: LockState | null
   /** Quien te esta bloqueando a ti, si alguien lo hace. */
   lockedBy: string | null
+  /** Detalle de esa amenaza, con el progreso. Ausente si no hay nadie. */
+  threat?: Threat | null
   result: MatchResult | null
 }
 

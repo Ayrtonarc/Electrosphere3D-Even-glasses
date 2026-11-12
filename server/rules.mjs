@@ -121,12 +121,32 @@ export function createRules(cfg) {
 
     function startMatch(at) {
       match = { phase: 'flying', endsAt: at + MATCH_MS, winner: null, reason: '' }
-      for (const p of players.values()) p.lock = { id: null, ms: 0 }
+      for (const p of players.values()) {
+        p.lock = { id: null, ms: 0 }
+        // Mejor bloqueo de la partida: el rango se calcula con esto, asi que
+        // perder el blanco y recuperarlo no borra lo ya conseguido.
+        p.bestMs = 0
+      }
     }
 
     function finishMatch(winner, reason, at) {
       if (match.phase === 'finished') return
       match = { phase: 'finished', endsAt: at + RESTART_MS, winner, reason }
+    }
+
+    /**
+     * Nota de la partida, estilo arcade, a partir del mejor bloqueo contra lo
+     * que pedia tu avion. S es derribo, A victoria por tiempo, B/D segun lo
+     * cerca que te quedaste. Se calcula por jugador: el `result` de cada
+     * payload lleva el suyo.
+     */
+    function rankOf(me) {
+      const needMs = lockOf(me.aircraft) * 1000
+      const bestMs = me.bestMs ?? 0
+      const score = needMs > 0 ? Math.min(100, Math.round((bestMs / needMs) * 100)) : 0
+      const won = match.winner === me.callsign
+      const rank = won ? (bestMs >= needMs ? 'S' : 'A') : score >= 75 ? 'B' : score >= 35 ? 'C' : 'D'
+      return { rank, score }
     }
 
     function join(id, info) {
@@ -140,6 +160,8 @@ export function createRules(cfg) {
         altM: null,
         seenAt: now(),
         lock: { id: null, ms: 0 },
+        /** Mejor bloqueo de la partida, para el rango final. */
+        bestMs: 0,
         /** Radar encendido: apagarlo es la unica forma de pasar desapercibido. */
         emitting: true,
         /** Blanco elegido a mano; `null` = automatico al mas cercano. */
@@ -269,12 +291,23 @@ export function createRules(cfg) {
 
           if (target) {
             const needMs = lockOf(me.aircraft) * 1000
+            if (me.lock.ms > me.bestMs) me.bestMs = me.lock.ms
             lock = { callsign: target.callsign, aircraft: target.aircraft, ms: me.lock.ms, needMs }
             if (me.lock.ms >= needMs) finishMatch(me.callsign, `bloqueo sobre ${target.callsign}`, at)
           }
         }
 
         const lockedBy = humans.find(other => other !== me && other.lock?.id === me.id)
+        // Aviso de misil: cuanto le falta al que te fija. El servidor solo dice
+        // el porcentaje; el umbral de "MISSILE" es del cliente.
+        const threat = lockedBy
+          ? {
+              callsign: lockedBy.callsign,
+              percent: Math.round(
+                Math.min(100, (lockedBy.lock.ms / (lockOf(lockedBy.aircraft) * 1000)) * 100),
+              ),
+            }
+          : null
 
         payloads.push({
           id: me.id,
@@ -295,7 +328,11 @@ export function createRules(cfg) {
             rangeKm: Math.max(VISUAL_KM, BASE_KM * radarOf(me.aircraft) * Math.pow(maxRcs, 0.25)),
             lock,
             lockedBy: lockedBy ? lockedBy.callsign : null,
-            result: match.phase === 'finished' ? { winner: match.winner, reason: match.reason } : null,
+            threat,
+            result:
+              match.phase === 'finished'
+                ? { winner: match.winner, reason: match.reason, ...rankOf(me) }
+                : null,
           },
         })
       }

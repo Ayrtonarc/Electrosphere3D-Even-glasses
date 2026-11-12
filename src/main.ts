@@ -17,6 +17,7 @@ import { renderScreenTiles, TILE_COUNT, TILE_H, TILE_W, tileOrigin } from './scr
 import { attitudeChanged, attitudeFromImu, smoothAttitude, type Attitude } from './imu'
 import { TrackMemory } from './track'
 import { Reconnector } from './reconnect'
+import { browserSpeaker, Radio } from './radio'
 import { browserWakeLock, ScreenWakeLock } from './wakelock'
 import type { ConnState, RadarState } from './types'
 
@@ -266,6 +267,12 @@ const retry = new Reconnector(() => {
  */
 const wake = new ScreenWakeLock(browserWakeLock())
 
+/**
+ * Radio de escuadron. Con el movil en el bolsillo es el unico canal que avisa
+ * de que te estan fijando, asi que se alimenta del mismo radar que el HUD.
+ */
+const radio = new Radio(browserSpeaker())
+
 /** Estado del enlace que no cabe en el HUD de las gafas. */
 function refreshLink() {
   if (session && !net.connected && (retry.waiting || retry.attempts > 0)) {
@@ -308,6 +315,7 @@ net.onRadar = radar => {
   state.radar = radar
   memory.update(radar.contacts)
   ui.setRadar(radar, memory.list())
+  radio.update(radar, memory.list())
   render()
 }
 
@@ -317,6 +325,7 @@ const ui = mountUi({
     state.emitting = true
     session = { url, join: { callsign, aircraft } }
     retry.reset()
+    radio.reset()
     net.connect(url, { callsign, aircraft })
     // Dentro del gesto del usuario: fuera de el el navegador lo deniega.
     void wake.acquire().then(() => refreshLink())
@@ -324,6 +333,7 @@ const ui = mountUi({
   onDisconnect: () => {
     session = null
     retry.cancel()
+    radio.reset()
     void wake.release().then(() => refreshLink())
     net.disconnect()
     state.radar = null
@@ -333,7 +343,10 @@ const ui = mountUi({
     render()
   },
   onAircraft: () => render(),
+  onRadio: on => radio.setEnabled(on),
 })
+
+radio.setEnabled(ui.getRadio())
 
 // Al volver de segundo plano hay que recuperar las dos cosas: el navegador
 // suelta el wake lock el solo, y el socket puede haber muerto sin avisar.

@@ -1,6 +1,6 @@
 import { AIRCRAFT, SERVER_PORT, type AircraftId, type ConnState, type RadarState } from './types'
 import { formatKm } from './geo'
-import { arrowFor, clock, lockPercent } from './hud'
+import { arrowFor, clock, lockPercent, MISSILE_PERCENT } from './hud'
 import type { TrackedContact } from './track'
 import type { Fix } from './location'
 
@@ -8,6 +8,7 @@ export interface UiHandlers {
   onConnect: (url: string, callsign: string, aircraft: AircraftId) => void
   onDisconnect: () => void
   onAircraft: (id: AircraftId) => void
+  onRadio: (on: boolean) => void
 }
 
 export interface Ui {
@@ -20,9 +21,20 @@ export interface Ui {
   setConnected: (connected: boolean) => void
   /** Aviso de enlace (wake lock, reintento). `null` lo oculta. */
   setLink: (text: string | null, live?: boolean) => void
+  setRadio: (on: boolean) => void
+  getRadio: () => boolean
 }
 
 const LS_KEY = 'aeronet:profile'
+const RADIO_KEY = 'aeronet:radio'
+
+function loadRadio(): boolean {
+  try {
+    return localStorage.getItem(RADIO_KEY) !== 'off'
+  } catch {
+    return true
+  }
+}
 
 interface Stored {
   callsign: string
@@ -78,6 +90,7 @@ export function mountUi(handlers: UiHandlers): Ui {
   const connectEl = $<HTMLButtonElement>('#connect')
   const disconnectEl = $<HTMLButtonElement>('#disconnect')
   const linkEl = $<HTMLSpanElement>('#link')
+  const radioEl = $<HTMLButtonElement>('#radio')
   const locationEl = $<HTMLDivElement>('#location')
   const gpsEl = $<HTMLSpanElement>('#gps')
   const contactsEl = $<HTMLUListElement>('#contacts')
@@ -95,6 +108,7 @@ export function mountUi(handlers: UiHandlers): Ui {
   const stored = loadProfile()
   let aircraft: AircraftId = stored.aircraft
   let connected = false
+  let radioOn = loadRadio()
 
   callsignEl.value = stored.callsign
   serverEl.value = defaultServerUrl()
@@ -158,6 +172,7 @@ export function mountUi(handlers: UiHandlers): Ui {
     lockWrap.hidden = true
     lockFill.style.width = '0%'
     warnEl.hidden = true
+    warnEl.classList.remove('is-missile')
     resultEl.hidden = true
     contactsEl.replaceChildren()
     drawEmpty()
@@ -183,6 +198,28 @@ export function mountUi(handlers: UiHandlers): Ui {
     linkEl.classList.toggle('is-live', live)
   }
 
+  const paintRadio = () => {
+    radioEl.textContent = radioOn ? 'Radio ON' : 'Radio OFF'
+    radioEl.classList.toggle('is-off', !radioOn)
+  }
+
+  const setRadio = (on: boolean) => {
+    radioOn = on
+    paintRadio()
+  }
+
+  radioEl.addEventListener('click', () => {
+    radioOn = !radioOn
+    try {
+      localStorage.setItem(RADIO_KEY, radioOn ? 'on' : 'off')
+    } catch {
+      /* modo privado: sin persistencia */
+    }
+    paintRadio()
+    handlers.onRadio(radioOn)
+  })
+  paintRadio()
+
   const setFix = (fix: Fix) => {
     const coords = `${fix.lat.toFixed(4)}, ${fix.lon.toFixed(4)}`
     const acc = fix.accuracy != null ? ` · ±${Math.round(fix.accuracy)} m` : ''
@@ -202,11 +239,14 @@ export function mountUi(handlers: UiHandlers): Ui {
     const mine = callsignEl.value.trim()
 
     const strong = document.createElement('strong')
-    strong.textContent = winner ? (winner === mine ? 'Victoria' : `Gana ${winner}`) : 'Empate'
+    const rank = radar.result?.rank ?? null
+    const verdict = winner ? (winner === mine ? 'Victoria' : `Gana ${winner}`) : 'Empate'
+    strong.textContent = rank ? `${verdict} · ${rank}` : verdict
 
     const span = document.createElement('span')
     const reason = radar.result?.reason ?? ''
-    span.textContent = `${reason} · nueva partida en ${Math.ceil(radar.remainingMs / 1000)} s`
+    const score = radar.result?.score != null ? `${radar.result.score}% de bloqueo · ` : ''
+    span.textContent = `${score}${reason} · nueva partida en ${Math.ceil(radar.remainingMs / 1000)} s`
 
     resultEl.replaceChildren(strong, span)
     resultEl.hidden = false
@@ -274,10 +314,16 @@ export function mountUi(handlers: UiHandlers): Ui {
     }
 
     if (live && radar.lockedBy) {
+      const threat = radar.threat ?? null
+      const missile = threat !== null && threat.percent >= MISSILE_PERCENT
       warnEl.hidden = false
-      warnEl.textContent = `⚠ TE BLOQUEAN · ${radar.lockedBy}`
+      warnEl.textContent = missile
+        ? `⚠ MISIL · ${radar.lockedBy} ${threat!.percent}%`
+        : `⚠ TE BLOQUEAN · ${radar.lockedBy}`
+      warnEl.classList.toggle('is-missile', missile)
     } else {
       warnEl.hidden = true
+      warnEl.classList.remove('is-missile')
     }
 
     if (radar.phase === 'finished') renderResult(radar)
@@ -357,5 +403,7 @@ export function mountUi(handlers: UiHandlers): Ui {
     getServerUrl: () => serverEl.value.trim() || defaultServerUrl(),
     setConnected,
     setLink,
+    setRadio,
+    getRadio: () => radioOn,
   }
 }

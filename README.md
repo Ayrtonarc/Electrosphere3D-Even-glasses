@@ -107,9 +107,18 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
   aparecen como flecha en el borde con su distancia real.
 - **Blanco fijado:** corchetes con el progreso de bloqueo en arco, la distancia,
   el cierre y la **altitud relativa** (`A+12m`).
-- **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN · X` o `BLOQUEANDO · X`;
+- **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN · X`, `!! MISSILE · X`
+  cuando el que te fija pasa del 70 % de su bloqueo, o `BLOQUEANDO · X`;
   parpadea cuando es una amenaza.
-- **Resultado:** `VICTORIA` / `GANA X` / `EMPATE` y cuenta atrás, en panel centrado.
+- **Resultado:** `VICTORIA · S` / `GANA X` / `EMPATE · D` y cuenta atrás, en panel
+  centrado. La nota sale del mejor bloqueo de la partida contra lo que pide tu
+  avión: **S** derribo, **A** victoria por tiempo, **B** ≥75 %, **C** ≥35 %,
+  **D** el resto.
+- **Radio:** voz sintetizada (`es-ES`) con el guion de un juego de cabina — saludo
+  al entrar en vuelo, contacto nuevo con rumbo y distancia, blanco fijado,
+  «mantén el bloqueo» al 50 %, aviso cuando te fijan, grito de misil, resultado
+  y partida nueva. Se enciende y apaga con el botón **Radio** del móvil y se
+  recuerda entre sesiones.
 - **Tap:** alterna radar ↔ ficha de tu avión (también en panel centrado).
 - **Rueda:** en el radar elige blanco; en la ficha cambia el alcance
   (`WDE` / `MID` / `NRW`).
@@ -166,6 +175,7 @@ npm run test:watch
 | `src/imu.test.ts` | actitud: recto, alabeo, cabeceo, calibración, muestras inválidas y media circular |
 | `src/reconnect.test.ts` | espera creciente con tope y ruido, `error`+`close` como un solo fallo, reinicio del historial |
 | `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
+| `src/radio.test.ts` | guion de radio (prioridades, transiciones, contactos) y huecos entre frases |
 | `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 
@@ -205,6 +215,11 @@ build` también comprueba los tipos de los tests.
   por el enlace cada segundo, cada tile se hashea y solo se reenvía si cambió
   (el reloj cambia 1 tile, no 4). Además se cuantiza a los 16 grises del panel
   antes de codificar: mismo aspecto en las gafas y ~35 % menos bytes.
+- **Radio:** el umbral de `MISSILE` (70 %) es **uno solo** para el HUD y para la
+  voz (`MISSILE_PERCENT` en `hud.ts`): lo que se ve es lo que se oye. El servidor
+  no decide umbrales, solo manda el `percent` del que te fija.
+- **Rango:** lo calcula el servidor por jugador dentro de `result`, porque dos
+  jugadores ven el mismo `winner` pero no la misma nota.
 
 ## Límites conocidos
 
@@ -214,6 +229,10 @@ build` también comprueba los tipos de los tests.
   una y apilar a todos los jugadores en el mismo punto.
 - El bucle de render es de 1 Hz a propósito: cada actualización viaja por el
   enlace con el móvil.
+- Los bots **no te fijan**, así que el aviso de `MISSILE` y la voz de amenaza
+  solo aparecen jugando contra otra persona.
+- La voz depende del motor del sistema (`speechSynthesis`). En iOS necesita el
+  gesto de **Conectar** para arrancar; si el móvil está en silencio, no suena.
 - Al reconectar se abre un socket nuevo y el servidor da de alta un jugador
   nuevo: si el anterior todavía no ha caducado (TCP que no ha avisado), durante
   unos segundos aparecen dos indicativos iguales. Se arregla solo cuando el

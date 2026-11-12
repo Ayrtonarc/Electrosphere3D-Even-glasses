@@ -222,3 +222,69 @@ describe('renderHud · ficha del avion', () => {
     expect(renderHud(input({ view: 'info', gpsSimulated: true })).detail).toContain('GPS simulado')
   })
 })
+
+describe('renderHud · amenaza y rango', () => {
+  it('por debajo del umbral sigue siendo "te bloquean"', () => {
+    const hud = renderHud(
+      input({ radar: radar({ lockedBy: 'GHOST-1', threat: { callsign: 'GHOST-1', percent: 69 } }) }),
+    )
+    expect(hud.alert).toBe('!! TE BLOQUEAN · GHOST-1')
+  })
+
+  it('a partir del 70 % el aviso pasa a MISSILE', () => {
+    const hud = renderHud(
+      input({ radar: radar({ lockedBy: 'GHOST-1', threat: { callsign: 'GHOST-1', percent: 70 } }) }),
+    )
+    expect(hud.alert).toBe('!! MISSILE · GHOST-1')
+  })
+
+  it('el misil manda sobre la amenaza cercana', () => {
+    const hud = renderHud(
+      input({
+        tracks: [track({ distKm: 0.05 })],
+        radar: radar({ lockedBy: 'GHOST-1', threat: { callsign: 'GHOST-1', percent: 95 } }),
+      }),
+    )
+    expect(hud.alert).toBe('!! MISSILE · GHOST-1')
+  })
+
+  it('el rango acompaña a la victoria', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          phase: 'finished',
+          result: { winner: 'VIPER-1', reason: 'bloqueo sobre FLANKER-1', rank: 'S', score: 100 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('VICTORIA · S')
+    expect(hud.detail).toContain('RANGO S · 100%')
+    expect(hud.detail).toContain('BLANCO DERRIBADO')
+  })
+
+  it('un empate tambien lleva nota', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          phase: 'finished',
+          result: { winner: null, reason: 'tiempo agotado', rank: 'D', score: 0 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('EMPATE · D')
+    expect(hud.detail).toContain('RANGO D · 0%')
+  })
+
+  it('sin rango (servidor viejo) el aviso queda como estaba', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          phase: 'finished',
+          result: { winner: 'VIPER-1', reason: 'bloqueo sobre FLANKER-1' },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('VICTORIA')
+    expect(hud.detail).not.toContain('RANGO')
+  })
+})

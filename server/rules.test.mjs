@@ -370,3 +370,99 @@ describe('reglas · cono de vision', () => {
     expect(contact.visual).toBe(false) // pero no esta a la vista
   })
 })
+
+describe('reglas · rango', () => {
+  it('el derribo se lleva una S con el bloqueo completo', () => {
+    const { tick, advance } = soloGame('f35')
+    let last = null
+    for (let i = 0; i < 40; i++) {
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+    const result = last.payloads[0].payload.result
+    expect(result.rank).toBe('S')
+    expect(result.score).toBe(100)
+  })
+
+  it('ganar por tiempo, sin completar el bloqueo, es una A', () => {
+    // Partida de 3 s: no da tiempo a los 18 s del F-35.
+    const { tick, advance } = soloGame('f35', { matchSeconds: 3 })
+    let last = null
+    for (let i = 0; i < 10; i++) {
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+    const payload = last.payloads[0].payload
+    expect(payload.result.winner).toBe('A')
+    expect(payload.result.reason).toBe('tiempo agotado')
+    expect(payload.result.rank).toBe('A')
+    expect(payload.result.score).toBeLessThan(100)
+  })
+
+  it('cada jugador recibe su propia nota', () => {
+    const { game, tick, advance } = makeGame()
+    game.join('a', { callsign: 'A', aircraft: 'su27' }) // fija en 10 s
+    game.join('b', { callsign: 'B', aircraft: 'f35' }) // fija en 18 s
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon) // ~55 m: se ven
+
+    let last = null
+    for (let i = 0; i < 20; i++) {
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+
+    const a = last.payloads.find(p => p.id === 'a').payload.result
+    const b = last.payloads.find(p => p.id === 'b').payload.result
+    expect(a.winner).toBe('A')
+    expect(a.rank).toBe('S')
+    // B se quedo a medio camino: gana nada, pero no es un cero.
+    expect(b.rank).toBe('C')
+    expect(b.score).toBeGreaterThan(35)
+    expect(b.score).toBeLessThan(100)
+  })
+
+  it('el que no aparece por el radar acaba en D', () => {
+    const { game, tick, advance } = makeGame({ matchSeconds: 3 })
+    game.join('a', { callsign: 'A', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 90) // de espaldas al fantasma
+    let last = null
+    for (let i = 0; i < 10; i++) {
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+    const result = last.payloads[0].payload.result
+    expect(result.winner).toBeNull()
+    expect(result.rank).toBe('D')
+    expect(result.score).toBe(0)
+  })
+})
+
+describe('reglas · amenaza', () => {
+  it('el que te fija aparece con su progreso', () => {
+    const { game, tick, advance } = makeGame()
+    game.join('a', { callsign: 'AGRESOR', aircraft: 'su27' }) // fija en 10 s
+    game.join('b', { callsign: 'VICTIMA', aircraft: 'f35' })
+    game.setPosition('a', MADRID.lat, MADRID.lon)
+    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon)
+
+    tick()
+    advance(1000)
+    tick()
+    advance(1000)
+    const radar = tick().payloads.find(p => p.id === 'b').payload
+
+    expect(radar.lockedBy).toBe('AGRESOR')
+    expect(radar.threat).toEqual({ callsign: 'AGRESOR', percent: 30 })
+  })
+
+  it('sin nadie encima no hay amenaza', () => {
+    const radar = soloGame('f35').tick().payloads[0].payload
+    expect(radar.lockedBy).toBeNull()
+    expect(radar.threat).toBeNull()
+  })
+})
