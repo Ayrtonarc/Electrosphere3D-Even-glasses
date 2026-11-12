@@ -17,6 +17,8 @@ export interface ScopeBlip {
   closureMps?: number
   /** Altitud del contacto en metros, si el servidor la conoce. */
   altM?: number
+  /** false si el contacto lleva el radar en silencio. */
+  emitting?: boolean
 }
 
 export type Point = readonly [x: number, y: number]

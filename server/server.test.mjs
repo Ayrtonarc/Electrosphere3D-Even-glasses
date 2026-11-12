@@ -93,6 +93,40 @@ describe('protocolo WebSocket', () => {
     ws.close()
   }, 15_000)
 
+  it('acepta el modo silencio y lo refleja en el radar', async () => {
+    const { ws, messages } = await openClient()
+    ws.send(JSON.stringify({ type: 'join', callsign: 'QUIET', aircraft: 'su27' }))
+    await waitFor(messages, 'welcome')
+    ws.send(JSON.stringify({ type: 'pos', ...MADRID, alt: 650 }))
+
+    const before = await waitFor(messages, 'radar')
+    expect(before.you.emitting).toBe(true)
+    expect(before.you.targetId).toBeNull()
+
+    const seen = messages.length
+    ws.send(JSON.stringify({ type: 'emission', on: false }))
+    ws.send(JSON.stringify({ type: 'target', id: before.contacts[0].id }))
+
+    // Hay que esperar un radar NUEVO: el anterior ya estaba en `messages`.
+    await new Promise((resolve, reject) => {
+      const started = Date.now()
+      const timer = setInterval(() => {
+        if (messages.slice(seen).some(m => m.type === 'radar')) {
+          clearInterval(timer)
+          resolve()
+        } else if (Date.now() - started > 5000) {
+          clearInterval(timer)
+          reject(new Error('sin radar nuevo'))
+        }
+      }, 50)
+    })
+    const after = messages.filter(m => m.type === 'radar').at(-1)
+    expect(after.you.emitting).toBe(false)
+    expect(after.lock.callsign).toBe(before.contacts[0].callsign)
+
+    ws.close()
+  }, 15_000)
+
   it('rechaza un mensaje que no es JSON sin romper la conexion', async () => {
     const { ws, messages } = await openClient()
     ws.send('esto no es json')

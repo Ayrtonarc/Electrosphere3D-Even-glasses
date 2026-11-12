@@ -117,7 +117,7 @@ describe('renderHud · radar', () => {
     expect(hud.alert).toBe('0 CONTACTOS')
     expect(hud.detail).toBe('SIN CONTACTOS\n\nMuevete para barrer.')
     expect(hud.info).toBe('F-35\nR 480 m')
-    expect(hud.footer).toBe('5:00 · TAP: ficha')
+    expect(hud.footer).toBe('5:00 · 2v: blanco · mant: silencio')
   })
 
   it('singular cuando hay un solo contacto', () => {
@@ -214,7 +214,7 @@ describe('renderHud · ficha del avion', () => {
     expect(hud.detail).toContain('Fija en 18 s')
     expect(hud.detail).toContain('RCS 0.001 m²')
     expect(hud.info).toBe('F-35\nR 480 m')
-    expect(hud.footer).toBe('5:00 · TAP: radar')
+    expect(hud.footer).toBe('5:00 · 2v: alcance · TAP: radar')
   })
 
   it('avisa del GPS simulado', () => {

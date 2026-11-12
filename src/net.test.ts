@@ -180,6 +180,41 @@ describe('NetClient', () => {
     })
   })
 
+  it('manda el estado del radar', () => {
+    const { net } = setup()
+    net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })
+    const socket = lastSocket()
+    socket.open()
+
+    net.sendEmission(false)
+
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: 'emission', on: false })
+  })
+
+  it('manda el blanco elegido y el automatico', () => {
+    const { net } = setup()
+    net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })
+    const socket = lastSocket()
+    socket.open()
+
+    net.sendTarget('bot-1')
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: 'target', id: 'bot-1' })
+
+    net.sendTarget(null)
+    expect(JSON.parse(socket.sent.at(-1)!)).toEqual({ type: 'target', id: null })
+  })
+
+  it('no manda nada del juego si el socket no esta abierto', () => {
+    const { net } = setup()
+    net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })
+    const socket = lastSocket()
+
+    net.sendEmission(false)
+    net.sendTarget('bot-1')
+
+    expect(socket.sent).toHaveLength(0)
+  })
+
   it('desconectar cierra sin avisar de cierre', () => {
     const { net, states } = setup()
     net.connect('ws://test', { callsign: 'A', aircraft: 'su27' })

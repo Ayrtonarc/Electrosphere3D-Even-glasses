@@ -228,3 +228,89 @@ describe('reglas · altitud', () => {
     expect(ctx.game.players.get('a').altM).toBeNull()
   })
 })
+
+describe('reglas · silencio radar', () => {
+  it('un objetivo callado se detecta mas cerca', () => {
+    const { rules } = makeGame()
+    const normal = rules.detectKm({ aircraft: 'f35' }, { aircraft: 'su27', emitting: true })
+    const silent = rules.detectKm({ aircraft: 'f35' }, { aircraft: 'su27', emitting: false })
+    expect(silent).toBeCloseTo(normal * rules.SILENT_FACTOR, 6)
+  })
+
+  it('el observador callado tambien ve menos', () => {
+    const { rules } = makeGame()
+    const normal = rules.detectKm({ aircraft: 'f35', emitting: true }, { aircraft: 'su27' })
+    const silent = rules.detectKm({ aircraft: 'f35', emitting: false }, { aircraft: 'su27' })
+    expect(silent).toBeLessThan(normal)
+  })
+
+  it('el suelo visual sigue mandando aunque los dos callen', () => {
+    const { rules } = makeGame()
+    const km = rules.detectKm({ aircraft: 'su27', emitting: false }, { aircraft: 'f35', emitting: false })
+    expect(km).toBeCloseTo(0.09, 2)
+  })
+
+  it('setEmission cambia el estado y viaja en el payload', () => {
+    const ctx = soloGame('su27')
+    expect(ctx.game.players.get('a').emitting).toBe(true)
+    ctx.game.setEmission('a', false)
+    expect(ctx.game.players.get('a').emitting).toBe(false)
+    expect(ctx.tick().payloads[0].payload.you.emitting).toBe(false)
+  })
+
+  it('los bots emiten por defecto', () => {
+    const ctx = soloGame('su27')
+    const radar = ctx.tick().payloads[0].payload
+    expect(radar.contacts.every(c => c.emitting === true)).toBe(true)
+  })
+})
+
+describe('reglas · elegir blanco', () => {
+  it('bloquea el blanco elegido aunque no sea el mas cercano', () => {
+    const ctx = soloGame('su27')
+    const first = ctx.tick().payloads[0].payload
+    const nearest = first.contacts[0]
+    const farthest = first.contacts.reduce((a, b) => (b.distKm > a.distKm ? b : a))
+    expect(farthest.id).not.toBe(nearest.id)
+
+    ctx.game.setTarget('a', farthest.id)
+    const radar = ctx.tick().payloads[0].payload
+    expect(radar.lock.callsign).toBe(farthest.callsign)
+  })
+
+  it('cambiar de blanco reinicia el contador', () => {
+    const ctx = soloGame('su27')
+    const contacts = ctx.tick().payloads[0].payload.contacts
+    ctx.game.setTarget('a', contacts[0].id)
+    ctx.tick()
+    ctx.tick()
+    const before = ctx.game.players.get('a').lock
+    expect(before.ms).toBeGreaterThan(ctx.rules.TICK_MS)
+
+    const other = contacts.find(c => c.id !== contacts[0].id)
+    ctx.game.setTarget('a', other.id)
+    const radar = ctx.tick().payloads[0].payload
+    expect(radar.lock.callsign).toBe(other.callsign)
+    expect(ctx.game.players.get('a').lock.ms).toBe(ctx.rules.TICK_MS)
+  })
+
+  it('si el elegido no esta, se suelta y al tick siguiente vuelve el automatico', () => {
+    const ctx = soloGame('su27')
+    ctx.game.setTarget('a', 'fantasma')
+
+    // Ese tick se queda sin bloqueo: perder el blanco se nota.
+    const lost = ctx.tick().payloads[0].payload
+    expect(ctx.game.players.get('a').targetId).toBeNull()
+    expect(lost.lock).toBeNull()
+
+    const next = ctx.tick().payloads[0].payload
+    expect(next.lock.callsign).toBe(next.contacts[0].callsign)
+  })
+
+  it('sin eleccion bloquea al mas cercano', () => {
+    const ctx = soloGame('su27')
+    const radar = ctx.tick().payloads[0].payload
+    expect(radar.you.targetId).toBeNull()
+    expect(radar.lock.callsign).toBe(radar.contacts[0].callsign)
+  })
+})

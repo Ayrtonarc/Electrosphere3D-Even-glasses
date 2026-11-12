@@ -43,6 +43,10 @@ wss.on('connection', ws => {
     }
 
     if (msg.type === 'pos' && joined) game.setPosition(id, msg.lat, msg.lon, msg.alt)
+
+    if (msg.type === 'emission' && joined) game.setEmission(id, msg.on)
+
+    if (msg.type === 'target' && joined) game.setTarget(id, msg.id)
   })
 
   ws.on('close', () => {

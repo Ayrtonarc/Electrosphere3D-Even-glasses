@@ -16,8 +16,12 @@ Cada jugador es un avión con firma radar (RCS), potencia de radar y tiempo de b
 Regla de detección (ecuación radar simplificada, en `src/geo.ts` y `server/index.mjs`):
 
 ```
-alcance_km = max(0.09, 4.3 × 0.06 × radar_observador × (rcs_objetivo)^0.25)
+alcance_km = max(0.09, 4.3 × 0.06 × radar_observador × (rcs_objetivo)^0.25 × silencio)
 ```
+
+El factor `silencio` es `1` con el radar encendido y `0.55` con el radar apagado,
+y se aplica **a los dos lados**: el que calla ve menos y también es más difícil
+de ver.
 
 El `0.06` es la **escala urbana**: los alcances están calibrados para jugar
 caminando, no para aviación real. El `0.09` (90 m) es el **suelo visual**: nadie
@@ -29,8 +33,13 @@ el tráfico WebSocket.
 
 ## Reglas de partida
 
-- **Duelo de bloqueo:** mantén fijado tu contacto visible más cercano. Si lo
-  pierdes, el contador vuelve a cero.
+- **Duelo de bloqueo:** mantén fijado tu blanco. Si no eliges, se bloquea el
+  contacto visible más cercano. Si pierdes el fijado, el contador vuelve a cero.
+- **Elegir blanco:** con la rueda en la vista de radar. Si el elegido deja de
+  verse, se suelta y vuelve el automático al tick siguiente.
+- **Modo silencio:** pulsación larga. Apagar el radar te hace difícil de ver,
+  pero también reduces lo que tú ves (×0.55 en ambos sentidos). El suelo visual
+  de 90 m sigue mandando: nadie desaparece del todo.
 - **5 minutos:** al agotarse el tiempo gana quien tenga más bloqueo acumulado.
 - **Reinicio:** 12 s de marcador y empieza otra partida.
 - **Memoria de pings:** un contacto que dejas de ver no desaparece de golpe;
@@ -98,6 +107,9 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
   parpadea cuando es una amenaza.
 - **Resultado:** `VICTORIA` / `GANA X` / `EMPATE` y cuenta atrás, en panel centrado.
 - **Tap:** alterna radar ↔ ficha de tu avión (también en panel centrado).
+- **Rueda:** en el radar elige blanco; en la ficha cambia el alcance
+  (`WDE` / `MID` / `NRW`).
+- **Pulsación larga:** enciende o apaga el radar (modo silencio).
 - **Doble tap:** sale.
 - **Companion:** elección de aeronave, estado de conexión y un radar en canvas.
 

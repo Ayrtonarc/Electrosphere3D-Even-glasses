@@ -85,6 +85,8 @@ const state = {
   fix: null as Fix | null,
   /** Fraccion del alcance maximo dibujada en el radar (selector de alcance). */
   rangeScale: 1,
+  /** Radar encendido. Apagarlo reduce lo que ves y lo que te ven. */
+  emitting: true,
 }
 
 // Velocidad propia: el GPS no la da, se saca de dos lecturas consecutivas.
@@ -136,6 +138,24 @@ function trackSpeed(fix: Fix) {
   headingDeg = headingDeg === null ? brg : blendHeading(headingDeg, brg, 0.35)
 }
 
+/**
+ * Rueda en vista radar: pasa al siguiente contacto de la lista (que ya viene
+ * ordenada por distancia). Sin eleccion previa empieza por el primero.
+ */
+function cycleTarget(step: 1 | -1) {
+  const radar = state.radar
+  if (!radar || !net.connected || radar.contacts.length === 0) return
+  const current = radar.you.targetId ?? null
+  const at = current ? radar.contacts.findIndex(c => c.id === current) : -1
+  const next =
+    at === -1
+      ? step > 0
+        ? 0
+        : radar.contacts.length - 1
+      : (at + step + radar.contacts.length) % radar.contacts.length
+  net.sendTarget(radar.contacts[next].id)
+}
+
 // ── Pantalla AR ───────────────────────────────────────────────────────────
 // Las imagenes viajan de una en una por el enlace con el movil, asi que solo
 // se reenvian los tiles que de verdad han cambiado.
@@ -155,6 +175,7 @@ function pushScreen(texts: HudTexts) {
     callsign: t.callsign,
     closureMps: t.closureMps,
     altM: t.altM,
+    emitting: t.emitting,
   }))
 
   renderScreenTiles(
@@ -171,6 +192,7 @@ function pushScreen(texts: HudTexts) {
       gpsAccuracyM: state.fix?.accuracy ?? null,
       gpsSimulated: state.fix?.simulated ?? false,
       rangeScale: state.rangeScale,
+      silent: !state.emitting,
     },
     tileHashes,
   )
@@ -235,6 +257,8 @@ net.onRadar = radar => {
 
 const ui = mountUi({
   onConnect: (url, callsign, aircraft) => {
+    // El servidor arranca a cada jugador con el radar encendido.
+    state.emitting = true
     net.connect(url, { callsign, aircraft })
   },
   onDisconnect: () => {
@@ -304,7 +328,23 @@ const unsubscribe = bridge.onEvenHubEvent(event => {
     sysType === OsEventTypeList.SCROLL_BOTTOM_EVENT ||
     textType === OsEventTypeList.SCROLL_BOTTOM_EVENT
   if (isScrollTop || isScrollBottom) {
-    state.rangeScale = cycleRange(state.rangeScale, isScrollTop ? 1 : -1)
+    if (state.view === 'radar') {
+      // En el radar la rueda elige blanco; el alcance se ajusta en la ficha.
+      cycleTarget(isScrollTop ? 1 : -1)
+    } else {
+      state.rangeScale = cycleRange(state.rangeScale, isScrollTop ? 1 : -1)
+    }
+    render()
+    return
+  }
+
+  // Pulsacion larga: enciende o apaga el radar (modo silencio).
+  if (
+    sysType === OsEventTypeList.LONG_PRESS_EVENT ||
+    textType === OsEventTypeList.LONG_PRESS_EVENT
+  ) {
+    state.emitting = !state.emitting
+    net.sendEmission(state.emitting)
     render()
     return
   }

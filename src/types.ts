@@ -34,6 +34,8 @@ export interface Contact {
   kind: 'human' | 'bot'
   /** Altitud del contacto en metros; ausente si su GPS no la da. */
   altM?: number
+  /** false si lleva el radar apagado (mas dificil de detectar). */
+  emitting?: boolean
 }
 
 export type MatchPhase = 'flying' | 'finished'
@@ -58,7 +60,16 @@ export interface RadarState {
   /** Milisegundos restantes de partida (o del reinicio si esta terminada). */
   remainingMs: number
   contacts: Contact[]
-  you: { callsign: string; aircraft: AircraftId; lat: number; lon: number }
+  you: {
+    callsign: string
+    aircraft: AircraftId
+    lat: number
+    lon: number
+    /** false si llevas el radar en silencio. */
+    emitting?: boolean
+    /** Blanco elegido a mano; `null` o ausente = automatico. */
+    targetId?: string | null
+  }
   /** Alcance maximo del radar propio contra el blanco mas visible (km). */
   rangeKm: number
   lock: LockState | null

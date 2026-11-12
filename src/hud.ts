@@ -150,7 +150,7 @@ export function renderHud(input: HudInput): HudTexts {
       gpsSimulated ? 'GPS simulado' : 'GPS activo',
     ].join('\n')
     info = `${me.name}\nR ${formatKm(myRange)}`
-    footer = `${clock(remainingMs)} · TAP: radar`
+    footer = `${clock(remainingMs)} · 2v: alcance · TAP: radar`
   } else {
     const lines: string[] = []
     if (lock) {
@@ -164,7 +164,7 @@ export function renderHud(input: HudInput): HudTexts {
 
     detail = lines.length ? lines.join('\n') : 'SIN CONTACTOS\n\nMuevete para barrer.'
     info = `${me.name}\nR ${formatKm(rangeKm)}`
-    footer = `${clock(remainingMs)} · TAP: ficha`
+    footer = `${clock(remainingMs)} · 2v: blanco · mant: silencio`
   }
 
   return { alert, detail, info, footer }

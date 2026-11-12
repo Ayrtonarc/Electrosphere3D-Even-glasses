@@ -65,6 +65,18 @@ export class NetClient {
     this.ws!.send(JSON.stringify(payload))
   }
 
+  /** Enciende o apaga el radar propio (modo silencio). */
+  sendEmission(on: boolean): void {
+    if (!this.connected) return
+    this.ws!.send(JSON.stringify({ type: 'emission', on }))
+  }
+
+  /** Fija el blanco a mano; `null` vuelve al automatico. */
+  sendTarget(id: string | null): void {
+    if (!this.connected) return
+    this.ws!.send(JSON.stringify({ type: 'target', id }))
+  }
+
   disconnect(): void {
     const ws = this.ws
     this.ws = null

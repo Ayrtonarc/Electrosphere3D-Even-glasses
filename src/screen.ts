@@ -82,6 +82,8 @@ export interface ScreenInput {
   attitude: Attitude | null
   /** true si la posicion viene del respaldo y no del GPS. */
   gpsSimulated: boolean
+  /** true si llevas el radar apagado (modo silencio). */
+  silent: boolean
 }
 
 interface TextStyle {
@@ -522,7 +524,8 @@ function drawRadar(
       continue
     }
 
-    const label = shortLabel(blip.callsign)
+    // `~` delata al contacto que lleva el radar apagado.
+    const label = `${shortLabel(blip.callsign)}${blip.emitting === false ? '~' : ''}`
     if (!label) continue
     ctx.font = `600 12px ${FONT}`
     const width = ctx.measureText(label).width
@@ -590,6 +593,7 @@ export function drawScreen(ctx: CanvasRenderingContext2D, input: ScreenInput): v
     gpsAccuracyM,
     gpsSimulated,
     rangeScale,
+    silent,
   } = input
 
   ctx.fillStyle = '#000000'
@@ -616,6 +620,10 @@ export function drawScreen(ctx: CanvasRenderingContext2D, input: ScreenInput): v
     alpha: 0.6,
     weight: 400,
   })
+  // Modo silencio: se ve menos, pero tambien te ven menos.
+  if (silent) {
+    text(ctx, 'SILENCIO', PAD + 58, 190, { size: 10, alpha: 0.9, weight: 400 })
+  }
 
   // Sin enlace no hay radar: el panel central explica el estado.
   if (online) {

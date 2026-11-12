@@ -81,11 +81,22 @@ export function createRules(cfg) {
   const rcsOf = id => cfg.types[id]?.rcs ?? 1
   const lockOf = id => cfg.types[id]?.lockSeconds ?? 10
 
+  /**
+   * Silencio radar: apagarlo te hace dificil de ver, pero tu tambien ves menos.
+   * El suelo visual sigue mandando, asi que nadie desaparece a menos de 90 m.
+   */
+  const SILENT_FACTOR = 0.55
+  const emissionFactor = p => (p.emitting === false ? SILENT_FACTOR : 1)
+
   /** Alcance de deteccion con suelo visual: nadie es invisible a menos de VISUAL_KM. */
   const detectKm = (observer, target) =>
     Math.max(
       VISUAL_KM,
-      BASE_KM * radarOf(observer.aircraft) * Math.pow(Math.max(rcsOf(target.aircraft), 1e-6), 0.25),
+      BASE_KM *
+        radarOf(observer.aircraft) *
+        Math.pow(Math.max(rcsOf(target.aircraft), 1e-6), 0.25) *
+        emissionFactor(observer) *
+        emissionFactor(target),
     )
 
   function createGame({ now = () => Date.now() } = {}) {
@@ -116,6 +127,10 @@ export function createRules(cfg) {
         altM: null,
         seenAt: now(),
         lock: { id: null, ms: 0 },
+        /** Radar encendido: apagarlo es la unica forma de pasar desapercibido. */
+        emitting: true,
+        /** Blanco elegido a mano; `null` = automatico al mas cercano. */
+        targetId: null,
       }
       players.set(id, player)
       return { ok: true, player }
@@ -129,6 +144,20 @@ export function createRules(cfg) {
         bots = []
         match = { phase: 'flying', endsAt: 0, winner: null, reason: '' }
       }
+      return true
+    }
+
+    function setEmission(id, on) {
+      const me = players.get(id)
+      if (!me) return false
+      me.emitting = on !== false
+      return true
+    }
+
+    function setTarget(id, targetId) {
+      const me = players.get(id)
+      if (!me) return false
+      me.targetId = typeof targetId === 'string' && targetId ? targetId : null
       return true
     }
 
@@ -195,15 +224,21 @@ export function createRules(cfg) {
             distKm: Math.round(distKm * 1000) / 1000,
             bearingDeg: Math.round(bearingDeg(me, other)),
             kind: other.kind ?? 'human',
+            emitting: other.emitting !== false,
             ...(typeof other.altM === 'number' ? { altM: Math.round(other.altM) } : {}),
           })
         }
         contacts.sort((a, b) => a.distKm - b.distKm)
 
-        // Bloqueo: mantener fijado el contacto mas cercano que ves.
+        // Bloqueo: el blanco elegido, o el mas cercano si no se ha elegido nada.
         let lock = null
         if (match.phase === 'flying') {
-          const target = contacts[0] ?? null
+          let target = contacts[0] ?? null
+          if (me.targetId) {
+            target = contacts.find(c => c.id === me.targetId) ?? null
+            // Si el elegido ya no se ve, se suelta para no quedarse clavado.
+            if (!target) me.targetId = null
+          }
           if (!target) {
             me.lock = { id: null, ms: 0 }
           } else if (me.lock.id === target.id) {
@@ -229,7 +264,14 @@ export function createRules(cfg) {
             phase: match.phase,
             remainingMs: Math.max(0, match.endsAt - at),
             contacts: contacts.slice(0, MAX_CONTACTS),
-            you: { callsign: me.callsign, aircraft: me.aircraft, lat: me.lat, lon: me.lon },
+            you: {
+              callsign: me.callsign,
+              aircraft: me.aircraft,
+              lat: me.lat,
+              lon: me.lon,
+              emitting: me.emitting !== false,
+              targetId: me.targetId,
+            },
             rangeKm: Math.max(VISUAL_KM, BASE_KM * radarOf(me.aircraft) * Math.pow(maxRcs, 0.25)),
             lock,
             lockedBy: lockedBy ? lockedBy.callsign : null,
@@ -245,6 +287,8 @@ export function createRules(cfg) {
       join,
       remove,
       setPosition,
+      setEmission,
+      setTarget,
       prune,
       tick,
       get size() {
@@ -262,5 +306,18 @@ export function createRules(cfg) {
     }
   }
 
-  return { detectKm, botsAt, createGame, BASE_KM, VISUAL_KM, TICK_MS, MATCH_MS, RESTART_MS, rcsOf, radarOf, lockOf }
+  return {
+    detectKm,
+    botsAt,
+    createGame,
+    BASE_KM,
+    VISUAL_KM,
+    TICK_MS,
+    MATCH_MS,
+    RESTART_MS,
+    SILENT_FACTOR,
+    rcsOf,
+    radarOf,
+    lockOf,
+  }
 }

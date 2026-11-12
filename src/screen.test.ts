@@ -184,6 +184,7 @@ function input(overrides: Partial<ScreenInput> = {}): ScreenInput {
     gpsAccuracyM: 8,
     gpsSimulated: false,
     rangeScale: 1,
+    silent: false,
     ...overrides,
   }
 }
@@ -247,5 +248,30 @@ describe('drawScreen', () => {
       lock: null,
     }
     expect(() => drawScreen(ctx, input({ radar: finished, view: 'info' }))).not.toThrow()
+  })
+})
+
+describe('drawScreen · silencio', () => {
+  it('rotula SILENCIO cuando el radar esta apagado', () => {
+    const { ctx, drawn } = fakeCtx()
+    drawScreen(ctx, input({ silent: true }))
+    expect(drawn).toContain('SILENCIO')
+  })
+
+  it('no lo rotula con el radar encendido', () => {
+    const { ctx, drawn } = fakeCtx()
+    drawScreen(ctx, input({ silent: false }))
+    expect(drawn).not.toContain('SILENCIO')
+  })
+
+  it('marca con ~ al contacto que lleva el radar apagado', () => {
+    const { ctx, drawn } = fakeCtx()
+    drawScreen(
+      ctx,
+      input({
+        blips: [blip({ callsign: 'GHOST-1', aircraft: 'f35', locked: false, emitting: false })],
+      }),
+    )
+    expect(drawn).toContain('GHOST~')
   })
 })
