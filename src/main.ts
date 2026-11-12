@@ -7,7 +7,7 @@ import {
   TextContainerProperty,
   waitForEvenAppBridge,
 } from '@evenrealities/even_hub_sdk'
-import { NetClient } from './net'
+import { NetClient, type JoinInfo } from './net'
 import { startLocation, type Fix } from './location'
 import { mountUi } from './ui'
 import { renderHud, type HudTexts } from './hud'
@@ -16,6 +16,8 @@ import { cycleRange } from './instruments'
 import { renderScreenTiles, TILE_COUNT, TILE_H, TILE_W, tileOrigin } from './screen'
 import { attitudeChanged, attitudeFromImu, smoothAttitude, type Attitude } from './imu'
 import { TrackMemory } from './track'
+import { Reconnector } from './reconnect'
+import { browserWakeLock, ScreenWakeLock } from './wakelock'
 import type { ConnState, RadarState } from './types'
 
 const bridge = await waitForEvenAppBridge()
@@ -240,11 +242,65 @@ function render() {
 
 const net = new NetClient()
 
-net.onState = (conn, detail) => {
+/**
+ * Sesion viva: lo justo para reconectar sin molestar al jugador. Se guarda
+ * fuera de `NetClient` porque al reconectar hay que repetir el mismo join, y el
+ * cliente no debe saber nada de indicativos.
+ */
+let session: { url: string; join: JoinInfo } | null = null
+
+/**
+ * Reconexion: si el movil pierde cobertura un momento o el servidor se
+ * reinicia, el jugador vuelve solo. Sin esto hay que sacarse el telefono del
+ * bolsillo y teclear de nuevo, y durante el rato fuera de juego el resto te ve
+ * congelado.
+ */
+const retry = new Reconnector(() => {
+  if (session) net.connect(session.url, session.join)
+})
+
+/**
+ * Con la pantalla apagada el navegador congela el GPS: el jugador se queda
+ * quieto en el radar de los demas sin enterarse. Se pide el bloqueo al
+ * conectar y se suelta al salir.
+ */
+const wake = new ScreenWakeLock(browserWakeLock())
+
+/** Estado del enlace que no cabe en el HUD de las gafas. */
+function refreshLink() {
+  if (session && !net.connected && (retry.waiting || retry.attempts > 0)) {
+    const secs = retry.waiting ? Math.max(1, Math.round(retry.pendingDelay / 1000)) : 0
+    ui.setLink(secs > 0 ? `RECONECTO · ${secs} s` : 'RECONECTO', true)
+    return
+  }
+  if (wake.active) {
+    ui.setLink('PANTALLA FIJA', true)
+    return
+  }
+  if (session && wake.supported) {
+    ui.setLink('PANTALLA LIBRE', false)
+    return
+  }
+  ui.setLink(null)
+}
+
+net.onState = (conn, detail, fatal) => {
   state.conn = conn
-  state.connDetail = detail
-  ui.setConn(conn, detail)
+  if (conn === 'open') {
+    retry.reset()
+    state.connDetail = detail
+  } else if (conn === 'closed' && session && !fatal) {
+    const wait = retry.dropped()
+    state.connDetail = wait >= 0 ? `reintento ${Math.round(wait / 1000)} s` : 'reintentando'
+  } else {
+    // Un error con mensaje del servidor (sala llena, indicativo repetido) no se
+    // arregla reintentando lo mismo: hay que volver al lobby.
+    if (fatal) session = null
+    state.connDetail = detail
+  }
+  ui.setConn(conn, state.connDetail)
   ui.setConnected(conn === 'open')
+  refreshLink()
   render()
 }
 
@@ -259,9 +315,16 @@ const ui = mountUi({
   onConnect: (url, callsign, aircraft) => {
     // El servidor arranca a cada jugador con el radar encendido.
     state.emitting = true
+    session = { url, join: { callsign, aircraft } }
+    retry.reset()
     net.connect(url, { callsign, aircraft })
+    // Dentro del gesto del usuario: fuera de el el navegador lo deniega.
+    void wake.acquire().then(() => refreshLink())
   },
   onDisconnect: () => {
+    session = null
+    retry.cancel()
+    void wake.release().then(() => refreshLink())
     net.disconnect()
     state.radar = null
     state.conn = 'idle'
@@ -270,6 +333,14 @@ const ui = mountUi({
     render()
   },
   onAircraft: () => render(),
+})
+
+// Al volver de segundo plano hay que recuperar las dos cosas: el navegador
+// suelta el wake lock el solo, y el socket puede haber muerto sin avisar.
+document.addEventListener('visibilitychange', () => {
+  const visible = document.visibilityState === 'visible'
+  void wake.onVisibility(visible ? 'visible' : 'hidden').then(() => refreshLink())
+  if (visible && session && !net.connected && !retry.waiting) retry.dropped()
 })
 
 startLocation(bridge, fix => {

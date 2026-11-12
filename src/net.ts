@@ -10,11 +10,19 @@ type Msg =
   | RadarState & { type: 'radar' }
   | { type: 'error'; message: string }
 
-/** Cliente WebSocket minimo para el juego. Sin reconexion automatica en el MVP. */
+/**
+ * Cliente WebSocket minimo para el juego. No reconecta el solo: quien decide
+ * cuando reintentar es `Reconnector`, porque hay caidas que no se arreglan
+ * reintentando (sala llena, indicativo repetido).
+ */
 export class NetClient {
   private ws: WebSocket | null = null
 
-  onState: (state: ConnState, detail?: string) => void = () => {}
+  /**
+   * `fatal` marca los errores que vienen del servidor con un mensaje: reintentar
+   * el mismo join daria el mismo error en bucle.
+   */
+  onState: (state: ConnState, detail?: string, fatal?: boolean) => void = () => {}
   onRadar: (radar: RadarState) => void = () => {}
 
   get connected(): boolean {
@@ -47,7 +55,7 @@ export class NetClient {
         return
       }
       if (msg.type === 'radar') this.onRadar(msg)
-      else if (msg.type === 'error') this.onState('error', msg.message)
+      else if (msg.type === 'error') this.onState('error', msg.message, true)
     }
 
     ws.onerror = () => this.onState('error', 'no se pudo conectar')

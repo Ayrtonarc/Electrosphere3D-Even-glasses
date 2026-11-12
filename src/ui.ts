@@ -18,6 +18,8 @@ export interface Ui {
   getAircraft: () => AircraftId
   getServerUrl: () => string
   setConnected: (connected: boolean) => void
+  /** Aviso de enlace (wake lock, reintento). `null` lo oculta. */
+  setLink: (text: string | null, live?: boolean) => void
 }
 
 const LS_KEY = 'aeronet:profile'
@@ -75,6 +77,7 @@ export function mountUi(handlers: UiHandlers): Ui {
   const cardsEl = $<HTMLDivElement>('#aircraft')
   const connectEl = $<HTMLButtonElement>('#connect')
   const disconnectEl = $<HTMLButtonElement>('#disconnect')
+  const linkEl = $<HTMLSpanElement>('#link')
   const locationEl = $<HTMLDivElement>('#location')
   const gpsEl = $<HTMLSpanElement>('#gps')
   const contactsEl = $<HTMLUListElement>('#contacts')
@@ -172,6 +175,12 @@ export function mountUi(handlers: UiHandlers): Ui {
     lobbyEl.hidden = value
     flightEl.hidden = !value
     resetFlight()
+  }
+
+  const setLink = (text: string | null, live = false) => {
+    linkEl.hidden = text === null
+    linkEl.textContent = text ?? ''
+    linkEl.classList.toggle('is-live', live)
   }
 
   const setFix = (fix: Fix) => {
@@ -347,5 +356,6 @@ export function mountUi(handlers: UiHandlers): Ui {
     getAircraft: () => aircraft,
     getServerUrl: () => serverEl.value.trim() || defaultServerUrl(),
     setConnected,
+    setLink,
   }
 }

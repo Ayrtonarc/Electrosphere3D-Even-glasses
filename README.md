@@ -164,6 +164,8 @@ npm run test:watch
 | `src/screen.test.ts` | teselado 2x2 (cubre la pantalla, tiles ≤288x144), cuantización a 16 grises, hashes de tile y pintado completo de cada estado con canvas falso |
 | `src/instruments.test.ts` | tasa de cierre, calidad de GPS, escalas de alcance y altitud relativa |
 | `src/imu.test.ts` | actitud: recto, alabeo, cabeceo, calibración, muestras inválidas y media circular |
+| `src/reconnect.test.ts` | espera creciente con tope y ruido, `error`+`close` como un solo fallo, reinicio del historial |
+| `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
 | `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 
@@ -189,6 +191,16 @@ build` también comprueba los tipos de los tests.
   para no repintar por ruido.
 - **Altitud a pie:** el GPS del móvil da ±10 m, así que `A+12m` es decorativo:
   sirve para que el HUD se comporte como uno de cabina, no para táctica real.
+- **Enlace:** si el socket se cae, el cliente reconecta solo con espera creciente
+  (1, 2, 4, 8, 15 s y tope, con ±15 % de ruido para que ocho móviles no vuelvan
+  sincronizados). El chip del móvil pasa a `RECONECTO · n s`. Un error **con
+  mensaje** del servidor (`sala llena`, `indicativo repetido`) no se reintenta:
+  volver a pedir lo mismo daría el mismo error.
+- **Pantalla encendida:** con la pantalla apagada el navegador congela la
+  geolocalización y el jugador se queda congelado en el radar de los demás. Se
+  pide `Screen Wake Lock` al conectar (`PANTALLA FIJA`) y se suelta al salir. El
+  navegador lo suelta solo al pasar a segundo plano, así que al volver se vuelve
+  a pedir — y se reintenta el socket si murió mientras estaba oculto.
 - **Ancho de banda:** un frame completo son ~4 PNG. Para que no se vayan todos
   por el enlace cada segundo, cada tile se hashea y solo se reenvía si cambió
   (el reloj cambia 1 tile, no 4). Además se cuantiza a los 16 grises del panel
@@ -202,5 +214,9 @@ build` también comprueba los tipos de los tests.
   una y apilar a todos los jugadores en el mismo punto.
 - El bucle de render es de 1 Hz a propósito: cada actualización viaja por el
   enlace con el móvil.
+- Al reconectar se abre un socket nuevo y el servidor da de alta un jugador
+  nuevo: si el anterior todavía no ha caducado (TCP que no ha avisado), durante
+  unos segundos aparecen dos indicativos iguales. Se arregla solo cuando el
+  servidor cierra el socket viejo; falta un *takeover* explícito por indicativo.
 - `whitelist` del permiso `network` en `app.json` hay que actualizarla con el
   host real del servidor antes de publicar.
