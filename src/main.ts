@@ -41,8 +41,8 @@ const scopeImage = new ImageContainerProperty({
   xPosition: 0,
   yPosition: 44,
   width: 200,
-  height: 144,
-  containerID: 2,
+  height: 138,
+  containerID: 5,
   containerName: 'scope',
 })
 
@@ -54,7 +54,7 @@ const infoPanel = new TextContainerProperty({
   borderWidth: 0,
   borderColor: 5,
   paddingLength: 4,
-  containerID: 3,
+  containerID: 2,
   containerName: 'info',
   content: ' ',
   isEventCapture: 0,
@@ -68,7 +68,7 @@ const detailPanel = new TextContainerProperty({
   borderWidth: 0,
   borderColor: 5,
   paddingLength: 4,
-  containerID: 4,
+  containerID: 3,
   containerName: 'detail',
   content: ' ',
   isEventCapture: 0,
@@ -82,7 +82,7 @@ const footerPanel = new TextContainerProperty({
   borderWidth: 0,
   borderColor: 5,
   paddingLength: 4,
-  containerID: 5,
+  containerID: 4,
   containerName: 'footer',
   content: ' ',
   isEventCapture: 0,
@@ -158,7 +158,7 @@ function sendScope(blips: Parameters<typeof renderScopePng>[0], rangeKm: number)
     .then(bytes => {
       scopeChain = scopeChain.then(async () => {
         const result = await bridge.updateImageRawData(
-          new ImageRawDataUpdate({ containerID: 2, containerName: 'scope', imageData: bytes }),
+          new ImageRawDataUpdate({ containerID: 5, containerName: 'scope', imageData: bytes }),
         )
         if (result !== 'success') {
           // El host rechazo la imagen: seguimos con el HUD de texto.
@@ -193,9 +193,9 @@ function render() {
     gpsSimulated: state.fix?.simulated ?? false,
   })
   push(1, 'alert', texts.alert)
-  push(3, 'info', scopeError ? `IMG\n${scopeError}` : texts.info)
-  push(4, 'detail', texts.detail)
-  push(5, 'footer', texts.footer)
+  push(2, 'info', scopeError ? `IMG\n${scopeError}` : texts.info)
+  push(3, 'detail', texts.detail)
+  push(4, 'footer', texts.footer)
   pushScope()
 }
 

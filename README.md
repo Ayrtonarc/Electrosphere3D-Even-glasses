@@ -34,7 +34,7 @@ el tráfico WebSocket.
 - **5 minutos:** al agotarse el tiempo gana quien tenga más bloqueo acumulado.
 - **Reinicio:** 12 s de marcador y empieza otra partida.
 - **Memoria de pings:** un contacto que dejas de ver no desaparece de golpe;
-  queda 15 s como última posición conocida (`? Su-27 · 320 m · hace 8 s`).
+  queda 15 s como última posición conocida (`? Su-27 320m 8s`).
 
 ## Arrancar
 
@@ -56,9 +56,24 @@ En la app companion: indicativo, aeronave y **Conectar**.
 
 ## Qué verás
 
-- **HUD (576×288):** aviso superior (`⚠ F-35 A 120 m`, `⚠ TE BLOQUEAN · GHOST-1`),
-  barra de bloqueo (`#####----- 12/18 s`), contactos con rumbo y distancia, y pie
-  con las acciones.
+El display se reparte en cuatro zonas de texto y una imagen:
+
+```
+┌─────────────────────────────────────────────┐
+│ BLOQUEANDO · FLANKER-1                      │  aviso (576x40)
+├───────────┬─────────────────────────────────┤
+│   radar   │ [####----] 8.0/18s              │  imagen 200x138
+│  (avión)  │ * Su-27 220m 045°               │  + detalle (372x196)
+│           │ ? F-35 85m 8s                   │
+├───────────┴─────────────────────────────────┤
+│ F-35 / R 480 m        4:52 · TAP: ficha     │  info + pie
+└─────────────────────────────────────────────┘
+```
+
+- **Radar gráfico:** anillos de alcance, cruz y la silueta de tu avión en el
+  centro, con los contactos como puntos (los perdidos, atenuados).
+- **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN · X` o `BLOQUEANDO · X`.
+- **Contactos:** `*` marca el fijado, `?` un ping viejo con su antigüedad.
 - **Resultado:** `VICTORIA` / `GANA X` / `EMPATE` y cuenta atrás de reinicio.
 - **Tap:** alterna radar ↔ ficha de tu avión.
 - **Doble tap:** sale.
@@ -83,6 +98,7 @@ src/track.ts     memoria de pings (contactos frescos vs última posición conoci
 src/net.ts       cliente WebSocket
 src/location.ts  posición (GPS del móvil, con respaldo simulado)
 src/ui.ts        UI companion + radar en canvas
+src/scope.ts     radar gráfico de las gafas (canvas → PNG para el bridge)
 src/geo.ts       haversine, rumbo, alcance radar
 src/shared/aircraft.json   perfiles y reglas (compartido con el servidor)
 server/rules.mjs reglas puras: visibilidad, bloqueo, partidas y bots
@@ -109,6 +125,18 @@ npm run test:watch
 Las reglas viven en `server/rules.mjs` sin red ni relojes propios (el tiempo se
 inyecta), así que los tests simulan partidas enteras en milisegundos. `npm run
 build` también comprueba los tipos de los tests.
+
+## Notas de desarrollo
+
+- **Reinicia el simulador tras cambiar el código.** Recargar en caliente deja la
+  página anterior registrada y `createStartUpPageContainer` devuelve `invalid`
+  (1): los contenedores nuevos “no existen”. En frío se crea sin problema.
+- **Glifos:** la fuente del firmware no incluye `⚠` (U+26A0); el simulador lo
+  delata con `lv_draw_letter: glyph dsc. not found for U+26A0`. El HUD usa ASCII
+  (`!`, `!!`) y caracteres verificados: `↑ ↗ → ↘ ↓ ↙ ← ↖ · ° ² [ ] #`.
+- **Imagen:** `ImageContainerProperty` admite 20–288 × 20–144. Se envía un PNG
+  con `updateImageRawData`, **en serie** (una imagen en vuelo a la vez) y el SDK
+  la convierte a los 16 verdes del panel.
 
 ## Límites conocidos
 
