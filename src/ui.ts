@@ -11,7 +11,7 @@ import {
   type PlayerRecord,
   type StorageLike,
 } from './record'
-import { aircraftStats, aircraftTitle } from './stats'
+import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
 
 export interface UiHandlers {
   onConnect: (url: string, callsign: string, aircraft: AircraftId) => void
@@ -153,6 +153,7 @@ export function mountUi(handlers: UiHandlers): Ui {
       <span class="card-role">${profile.role}</span>
       <span class="card-blurb">${profile.blurb}</span>
       <span class="card-stats">RCS ${profile.rcs} m² · radar ${profile.radar.toFixed(2)}</span>
+      ${profile.special ? `<span class="card-special">SPW · ${profile.special.name}</span>` : ''}
     `
     card.addEventListener('click', () => {
       if (connected) return
@@ -191,6 +192,21 @@ export function mountUi(handlers: UiHandlers): Ui {
       value.textContent = stat.value
 
       row.append(label, value)
+      statsEl.appendChild(row)
+    }
+
+    const special = aircraftSpecial(aircraft)
+    if (special) {
+      const row = document.createElement('div')
+      row.className = 'special'
+
+      const name = document.createElement('b')
+      name.textContent = special.name
+
+      const blurb = document.createElement('span')
+      blurb.textContent = special.blurb
+
+      row.append(name, blurb)
       statsEl.appendChild(row)
     }
   }

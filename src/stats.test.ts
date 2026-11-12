@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aircraftStats, aircraftTitle } from './stats'
+import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
 import { AIRCRAFT } from './types'
 import { detectRangeKm } from './geo'
 
@@ -42,5 +42,28 @@ describe('aircraftStats', () => {
       expect(aircraftStats(id as keyof typeof AIRCRAFT)).toHaveLength(4)
       expect(aircraftTitle(id as keyof typeof AIRCRAFT)).toContain(AIRCRAFT[id as keyof typeof AIRCRAFT].name)
     }
+  })
+})
+
+describe('aircraftSpecial', () => {
+  it('los cuatro aviones traen arma y explicacion', () => {
+    const ids = Object.keys(AIRCRAFT) as (keyof typeof AIRCRAFT)[]
+    expect(ids).toHaveLength(4)
+
+    for (const id of ids) {
+      const special = aircraftSpecial(id)
+      expect(special?.name).toBeTruthy()
+      expect(special?.blurb).toBeTruthy()
+    }
+  })
+
+  it('cada arma es distinta', () => {
+    const names = (Object.keys(AIRCRAFT) as (keyof typeof AIRCRAFT)[]).map(id => aircraftSpecial(id)?.name)
+    expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('el F-16 y el MiG-29 completan la tabla', () => {
+    expect(aircraftStats('f16').map(s => s.value)).toEqual(['5 m²', '336 m', '13 s', '386 m'])
+    expect(aircraftStats('mig29').map(s => s.value)).toEqual(['7 m²', '384 m', '15 s', '420 m'])
   })
 })

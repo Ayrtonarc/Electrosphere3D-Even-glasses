@@ -6,7 +6,7 @@ import {
   type RadarState,
 } from './types'
 import { formatKm } from './geo'
-import { aircraftStats, aircraftTitle } from './stats'
+import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
 import type { TrackedContact } from './track'
 
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖']
@@ -180,9 +180,11 @@ export function renderHud(input: HudInput): HudTexts {
     // Misma fuente que la ficha del movil: si cambia la formula, cambian las dos.
     const stats = aircraftStats(aircraft)
     const range = stats.find(s => s.id === 'radar')?.value ?? '—'
+    const special = aircraftSpecial(aircraft)
     detail = [
       aircraftTitle(aircraft).toUpperCase(),
       ...stats.map(s => `${s.label} ${s.value}`),
+      ...(special ? [`SPW ${special.name}`] : []),
       gpsSimulated ? 'GPS simulado' : 'GPS activo',
     ].join('\n')
     info = `${me.name}\nR ${range}`

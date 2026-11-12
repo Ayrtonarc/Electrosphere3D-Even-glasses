@@ -663,3 +663,109 @@ describe('reglas · ronda y escenario', () => {
     expect(after).toBeGreaterThan(before)
   })
 })
+
+describe('reglas · armas especiales', () => {
+  it('el catalogo trae cuatro aviones, cada uno con su arma', () => {
+    const { conf } = makeGame()
+    const ids = Object.keys(conf.types)
+    expect(ids).toHaveLength(4)
+    for (const id of ids) {
+      expect(conf.types[id].special?.name).toBeTruthy()
+      expect(conf.types[id].special?.blurb).toBeTruthy()
+    }
+  })
+
+  it('el R-73 del Su-27 fija sin cono ciego', () => {
+    // Rumbo 140: el fantasma (245) y el Flanker (30) quedan fuera de un cono
+    // de 90 grados, pero dentro del R-73.
+    const f35 = soloGame('f35')
+    f35.game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+    expect(f35.tick().payloads[0].payload.lock).toBeNull()
+
+    const su27 = soloGame('su27')
+    su27.game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+    expect(su27.tick().payloads[0].payload.lock).not.toBeNull()
+  })
+
+  it('el QAAM del F-35 aguanta el bloqueo sin linea de vision', () => {
+    const run = aircraft => {
+      const { game, tick, advance } = soloGame(aircraft)
+      const step = () => tick().payloads[0].payload
+
+      game.setPosition('a', MADRID.lat, MADRID.lon, null, 0)
+      step()
+      advance(1000)
+      step()
+      advance(1000)
+      expect(step().lock.ms).toBe(3000)
+
+      // Se gira: pierde el blanco durante dos ticks.
+      game.setPosition('a', MADRID.lat, MADRID.lon, null, 140)
+      advance(1000)
+      expect(step().lock).toBeNull()
+      advance(1000)
+      step()
+
+      // Y vuelve a encararlo.
+      game.setPosition('a', MADRID.lat, MADRID.lon, null, 0)
+      return step().lock.ms
+    }
+
+    expect(run('f35')).toBe(4000) // sigue desde 3 s
+    expect(run('f16')).toBe(1000) // sin QAAM, empieza de cero
+  })
+
+  it('el ECM del MiG-29 encarece el bloqueo enemigo', () => {
+    const percent = victim => {
+      const { game, tick, advance } = makeGame()
+      game.join('a', { callsign: 'A', aircraft: 'su27' }) // fija en 10 s
+      game.join('b', { callsign: 'B', aircraft: victim })
+      game.setPosition('a', MADRID.lat, MADRID.lon)
+      game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon)
+      tick()
+      advance(1000)
+      tick()
+      advance(1000)
+      return tick().payloads.find(p => p.id === 'b').payload.threat.percent
+    }
+
+    expect(percent('f16')).toBe(30) // 3 s de 10 s
+    expect(percent('mig29')).toBe(22) // 3 s de 13,5 s (10 x 1,35)
+  })
+
+  it('el Fox-2 del F-16 perdona la primera baja', () => {
+    // Avion de prueba: fija en 1 s y perdona una baja.
+    const testType = {
+      name: 'Banco',
+      role: 'Prueba',
+      rcs: 5,
+      radar: 1,
+      lockSeconds: 1,
+      blurb: 'Solo para tests.',
+      special: { id: 'fox2', name: 'Fox-2', blurb: 'Una baja gratis', fx: { freeDeaths: 1 } },
+    }
+    const { game, tick, advance } = soloGame('banco', {
+      types: { ...cfg.types, banco: testType },
+      bots: { engageRangeM: 200, lockMultiplier: 0.05, warmupSeconds: 2, cooldownSeconds: 0 },
+    })
+    // De cara al Flanker: asi el primer derribo es suyo y no del fantasma.
+    game.setPosition('a', MADRID.lat, MADRID.lon, null, 30)
+
+    const scores = []
+    let payload = null
+    for (let i = 0; i < 20; i++) {
+      game.setPosition('a', MADRID.lat, MADRID.lon, null, 30)
+      payload = tick().payloads[0].payload
+      if (scores.length === 0 && payload.you.deaths >= 1) scores.push(payload.you.score)
+      if (payload.you.deaths >= 2) {
+        scores.push(payload.you.score)
+        break
+      }
+      advance(1000)
+    }
+
+    expect(payload.you.kills).toBeGreaterThanOrEqual(1)
+    expect(scores[0]).toBe(100) // primera baja: gratis
+    expect(scores[1]).toBe(50) // la segunda ya cuesta 50
+  })
+})

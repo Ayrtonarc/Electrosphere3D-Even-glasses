@@ -6,12 +6,19 @@ como HUD.
 
 ## Cómo funciona
 
-Cada jugador es un avión con firma radar (RCS), potencia de radar y tiempo de bloqueo:
+Cada jugador es un avión con firma radar (RCS), potencia de radar, tiempo de
+bloqueo y **un arma especial** que cambia una regla concreta de la ronda:
 
-| Avión | RCS (m²) | Radar | Bloqueo | Consecuencia |
-|---|---|---|---|---|
-| F-35 | 0.001 | 1.00 | 18 s | Ve al Su-27 a 480 m; a otro F-35 solo a 90 m |
-| Su-27 | 12 | 0.55 | 10 s | Ve al Su-27 a 264 m; al F-35 a 90 m |
+| Avión | RCS (m²) | Radar | Bloqueo | Arma | Qué hace |
+|---|---|---|---|---|---|
+| F-35 | 0.001 | 1.00 | 18 s | **QAAM** | Si pierdes la línea, el bloqueo aguanta 5 s en memoria |
+| Su-27 | 12 | 0.55 | 10 s | **R-73** | Fija en cualquier dirección: sin cono ciego |
+| F-16 | 5 | 0.70 | 13 s | **Fox-2** | La primera baja de la ronda no te cuesta puntos |
+| MiG-29 | 7 | 0.80 | 15 s | **ECM** | A quien te fija le cuesta un 35 % más cerrar el bloqueo |
+
+Los números de cada arma viven en `types.<id>.special.fx` del catálogo
+(`src/shared/aircraft.json`), así que el servidor y la ficha del móvil leen la
+misma fuente.
 
 Regla de detección (ecuación radar simplificada, en `src/geo.ts` y `server/index.mjs`):
 

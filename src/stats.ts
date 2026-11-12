@@ -33,6 +33,17 @@ export function aircraftTitle(id: AircraftId): string {
   return `${me.name} · ${me.role}`
 }
 
+export interface SpecialInfo {
+  name: string
+  blurb: string
+}
+
+/** Arma especial del avion, o `null` si el catalogo no define ninguna. */
+export function aircraftSpecial(id: AircraftId): SpecialInfo | null {
+  const special = AIRCRAFT[id].special
+  return special ? { name: special.name, blurb: special.blurb } : null
+}
+
 export function aircraftStats(id: AircraftId): Stat[] {
   const me = AIRCRAFT[id]
   const radarKm = detectRangeKm(me.radar, LOUDEST_RCS, BASE_KM, VISUAL_RANGE_KM)

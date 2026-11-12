@@ -10,6 +10,30 @@ export interface AircraftProfile {
   radar: number
   lockSeconds: number
   blurb: string
+  /** Arma especial del avion: cambia una regla concreta de la ronda. */
+  special?: AircraftSpecial
+}
+
+/**
+ * Arma especial. `fx` son los numeros que aplica el servidor y `blurb` lo que
+ * lee el jugador: el catalogo es la unica fuente para ambos.
+ */
+export interface AircraftSpecial {
+  id: string
+  name: string
+  blurb: string
+  fx?: {
+    /** Metros de alcance de fijado (por defecto `lock.rangeM`). */
+    rangeM?: number
+    /** Apertura del cono en grados (por defecto `lock.fovDeg`). */
+    fovDeg?: number
+    /** Milisegundos que aguanta el bloqueo sin linea de vision. */
+    keepMs?: number
+    /** Multiplicador del bloqueo que te cuesta a quien te fija. */
+    lockPenalty?: number
+    /** Bajas de la ronda que no cuestan puntos. */
+    freeDeaths?: number
+  }
 }
 
 export const AIRCRAFT = profiles.types as Record<AircraftId, AircraftProfile>

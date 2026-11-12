@@ -38,7 +38,13 @@
       "rcs": 0.001,
       "radar": 1,
       "lockSeconds": 18,
-      "blurb": "Casi invisible. Ve lejos, pero tarda en fijar el blanco."
+      "blurb": "Casi invisible. Ve lejos, pero tarda en fijar el blanco.",
+      "special": {
+        "id": "qaam",
+        "name": "QAAM",
+        "blurb": "Si pierdes la linea, el bloqueo aguanta 5 s en memoria.",
+        "fx": { "keepMs": 5000 }
+      }
     },
     "su27": {
       "name": "Su-27",
@@ -46,7 +52,41 @@
       "rcs": 12,
       "radar": 0.55,
       "lockSeconds": 10,
-      "blurb": "Firma enorme. Solo ve cerca, pero fija el blanco muy rapido."
+      "blurb": "Firma enorme. Solo ve cerca, pero fija el blanco muy rapido.",
+      "special": {
+        "id": "r73",
+        "name": "R-73",
+        "blurb": "Fija sin importar hacia donde mires: no tiene cono ciego.",
+        "fx": { "fovDeg": 360 }
+      }
+    },
+    "f16": {
+      "name": "F-16",
+      "role": "Interceptor",
+      "rcs": 5,
+      "radar": 0.7,
+      "lockSeconds": 13,
+      "blurb": "Equilibrado y rapido de gatillo. Ni sigiloso ni ciego.",
+      "special": {
+        "id": "fox2",
+        "name": "Fox-2",
+        "blurb": "La primera baja de la ronda no te cuesta puntos.",
+        "fx": { "freeDeaths": 1 }
+      }
+    },
+    "mig29": {
+      "name": "MiG-29",
+      "role": "Guerra electronica",
+      "rcs": 7,
+      "radar": 0.8,
+      "lockSeconds": 15,
+      "blurb": "Radar amplio y firma media. Aguanta mejor que le fijen.",
+      "special": {
+        "id": "ecm",
+        "name": "ECM",
+        "blurb": "A quien te fija le cuesta un 35 % mas cerrar el bloqueo.",
+        "fx": { "lockPenalty": 1.35 }
+      }
     }
   }
 }

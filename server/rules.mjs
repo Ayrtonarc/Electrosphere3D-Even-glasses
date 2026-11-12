@@ -91,6 +91,19 @@ export function createRules(cfg) {
   const rcsOf = id => cfg.types[id]?.rcs ?? 1
   const lockOf = id => cfg.types[id]?.lockSeconds ?? 10
 
+  // ── Armas especiales ────────────────────────────────────────
+  // Cada avion trae la suya y cambia una regla concreta. Los numeros viven en
+  // `types[id].special.fx`: el catalogo es la unica fuente, y el cliente lee el
+  // mismo objeto para la ficha, asi que no hay dos verdades.
+  const fxOf = id => cfg.types[id]?.special?.fx ?? {}
+  /** Alcance de vision directa propio (el cono se mide sobre el observador). */
+  const lockRangeKmOf = id => (fxOf(id).rangeM ?? cfg.lock.rangeM) / 1000
+  const fovOf = id => fxOf(id).fovDeg ?? LOCK_FOV_DEG
+  /** Lo que le cuesta a OTRO bloquearte (ECM). */
+  const ecmOf = id => fxOf(id).lockPenalty ?? 1
+  const keepMsOf = id => fxOf(id).keepMs ?? 0
+  const freeDeathsOf = id => fxOf(id).freeDeaths ?? 0
+
   // ── Bots que fijan ──────────────────────────────────────────────────────
   // Los bots no tienen cono de vision ni radar propio: usan un alcance de
   // enganche fijo. Con `detectKm` el bot F-35 (radar 1, 480 m) derribaria a
@@ -149,7 +162,7 @@ export function createRules(cfg) {
   const inCone = (observer, target) => {
     if (observer.heading == null) return true
     const diff = Math.abs(((bearingDeg(observer, target) - observer.heading + 540) % 360) - 180)
-    return diff <= LOCK_FOV_DEG / 2
+    return diff <= fovOf(observer.aircraft) / 2
   }
 
   function createGame({ now = () => Date.now() } = {}) {
@@ -174,8 +187,12 @@ export function createRules(cfg) {
     function downPlayer(player, at) {
       player.downUntil = at + RESPAWN_MS
       player.deaths += 1
-      player.score = Math.max(0, player.score - POINTS.death)
+      // Fox-2: las primeras bajas de la ronda salen gratis.
+      if (player.deaths > freeDeathsOf(player.aircraft)) {
+        player.score = Math.max(0, player.score - POINTS.death)
+      }
       player.lock = { id: null, ms: 0 }
+      player.holdUntil = null
     }
 
     /** Un derribo: cobra el atacante y saca al blanco de la ronda un rato. */
@@ -283,7 +300,7 @@ export function createRules(cfg) {
         }
         st.ms += TICK_MS
 
-        if (st.ms >= botNeedMs(bot)) {
+        if (st.ms >= botNeedMs(bot) * ecmOf(victim.aircraft)) {
           downPlayer(victim, at)
           st.targetId = null
           st.ms = 0
@@ -309,6 +326,7 @@ export function createRules(cfg) {
         p.kills = 0
         p.deaths = 0
         p.downUntil = 0
+        p.holdUntil = null
         p.targets = new Set()
         p.awarded = new Set()
       }
@@ -367,6 +385,8 @@ export function createRules(cfg) {
         deaths: 0,
         /** Hasta cuando esta fuera de juego por haber sido derribado. */
         downUntil: 0,
+        /** Caducidad de la memoria de bloqueo (solo aviones con QAAM). */
+        holdUntil: null,
         /** Blancos distintos que ha llegado a fijar (objetivo secundario). */
         targets: new Set(),
         /** Bonus de objetivos ya cobrados. */
@@ -487,7 +507,7 @@ export function createRules(cfg) {
             distKm: Math.round(distKm * 1000) / 1000,
             bearingDeg: Math.round(bearingDeg(me, other)),
             kind: other.kind ?? 'human',
-            visual: distKm <= LOCK_RANGE_KM && inCone(me, other),
+            visual: distKm <= lockRangeKmOf(me.aircraft) && inCone(me, other),
             emitting: other.emitting !== false,
             ...(typeof other.altM === 'number' ? { altM: Math.round(other.altM) } : {}),
           })
@@ -511,15 +531,28 @@ export function createRules(cfg) {
             target = contacts.find(c => c.visual) ?? null
           }
           if (!target) {
-            me.lock = { id: null, ms: 0 }
+            // Sin blanco: si el avion tiene memoria de bloqueo (QAAM) se
+            // conserva el progreso un rato por si vuelve a asomar.
+            const keepMs = keepMsOf(me.aircraft)
+            if (me.lock.id && keepMs > 0) {
+              if (me.holdUntil == null) me.holdUntil = at + keepMs
+              if (at > me.holdUntil) {
+                me.lock = { id: null, ms: 0 }
+                me.holdUntil = null
+              }
+            } else {
+              me.lock = { id: null, ms: 0 }
+            }
           } else if (me.lock.id === target.id) {
+            me.holdUntil = null
             me.lock.ms += TICK_MS
           } else {
             me.lock = { id: target.id, ms: TICK_MS }
+            me.holdUntil = null
           }
 
           if (target) {
-            const needMs = lockOf(me.aircraft) * 1000
+            const needMs = lockOf(me.aircraft) * 1000 * ecmOf(target.aircraft)
             if (me.lock.ms > me.bestMs) me.bestMs = me.lock.ms
             me.targets.add(target.id)
             lock = { callsign: target.callsign, aircraft: target.aircraft, ms: me.lock.ms, needMs }
@@ -542,7 +575,12 @@ export function createRules(cfg) {
             // Hacia donde esta el que te fija, para que el aviso pueda señalar.
             bearingDeg: Math.round(bearingDeg(me, lockedByPlayer)),
             percent: Math.round(
-              Math.min(100, (lockedByPlayer.lock.ms / (lockOf(lockedByPlayer.aircraft) * 1000)) * 100),
+              Math.min(
+                100,
+                (lockedByPlayer.lock.ms /
+                  (lockOf(lockedByPlayer.aircraft) * 1000 * ecmOf(me.aircraft))) *
+                  100,
+              ),
             ),
           })
         }
@@ -552,7 +590,9 @@ export function createRules(cfg) {
           threats.push({
             callsign: bot.callsign,
             bearingDeg: Math.round(bearingDeg(me, bot)),
-            percent: Math.round(Math.min(100, (st.ms / botNeedMs(bot)) * 100)),
+            percent: Math.round(
+              Math.min(100, (st.ms / (botNeedMs(bot) * ecmOf(me.aircraft))) * 100),
+            ),
           })
         }
         threats.sort((a, b) => b.percent - a.percent)
