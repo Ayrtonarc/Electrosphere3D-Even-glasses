@@ -141,11 +141,12 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
 - **Récord:** el móvil guarda rondas jugadas, victorias, racha y mejor nota en
   `localStorage` y los enseña en el debriefing (`2/3 rondas · 2 seguidas · mejor S`).
   Se contabiliza una sola vez por ronda.
-- **Radio:** voz sintetizada (`es-ES`) con el guion de un juego de cabina — saludo
-  al entrar en vuelo, contacto nuevo con rumbo y distancia, blanco fijado,
-  «mantén el bloqueo» al 50 %, aviso cuando te fijan, grito de misil, resultado
-  y partida nueva. Se enciende y apaga con el botón **Radio** del móvil y se
-  recuerda entre sesiones.
+- **Radio:** voz sintetizada (`es-ES`) del **sistema de a bordo**, no un
+  personaje: saludo al entrar en vuelo, contacto nuevo con rumbo y distancia,
+  blanco fijado, «mantén el bloqueo» al 50 %, quién te fija, grito de misil,
+  derribo confirmado con tus puntos, te han derribado, quién lidera con cuánto,
+  objetivo cumplido, resultado y ronda nueva. Se enciende y apaga con el botón
+  **Radio** del móvil y se recuerda entre sesiones.
 - **Tap:** alterna radar ↔ ficha de tu avión (también en panel centrado).
 - **Rueda:** en el radar elige blanco; en la ficha cambia el alcance
   (`WDE` / `MID` / `NRW`).

@@ -37,22 +37,23 @@ De ahí salen cuatro reglas que no se negocian:
 
 ## 3. Las siete piezas que faltan
 
-### 3.1 Elenco de radio — coste S, impacto altísimo
+### 3.1 La voz del sistema — coste S, impacto alto
 
-Hoy hay **una** voz anónima narrando. Ace Combat tiene **personajes**: el AWACS
-que te guía, el compañero que bromea, el as enemigo que te insulta.
+Ace Combat tiene reparto: AWACS, compañero de ala, as enemigo. **Aquí no.** Es
+jugador contra jugador: no hay a quién inventar, y fingir un AWACS cuando el
+que te dispara es un tipo con móvil se nota.
 
-- `radio.ts` pasa de «una frase por transición» a un **guion por misión** con
-  `who: 'AWACS' | 'ALA' | 'ENEMIGO'`.
-- Cada personaje: prefijo en el HUD (`[AWACS]`), `pitch`/`rate` distintos y su
-  propio hueco anti-repetición.
-- El motor de transiciones que ya existe no cambia: solo la tabla de guiones.
-- 5–8 frases por misión bastan para que el juego parezca escrito.
+Habla el avión. Solo cuenta hechos:
 
-En multijugador los personajes salen gratis del propio juego: **`ALA`** es el
-jugador más cercano, **`ENEMIGO`** es el que lleva la marca `AS` (o el que te
-está fijando) y el resto de frases las firma el **AWACS**, que es el único que
-puede hablarle a todos por igual.
+- **Amenazas:** quién te fija y por dónde, grito de misil.
+- **Marcador:** derribo confirmado con tus puntos, te han derribado, quién
+  lidera y con cuánto.
+- **Objetivos:** el primario cumplido.
+- **Ronda:** resultado, nueva ronda.
+
+Todo sale de comparar la foto anterior del radar con la actual, en una función
+pura (`planRadio`) que ya existe. Cinco o seis frases más y el juego parece
+arbitrado, sin inventar a nadie.
 
 No hace falta API nueva. Es el mejor retorno por línea de código de toda la lista.
 
@@ -136,8 +137,8 @@ tercer perfil desbloqueable. Sin economía: nadie quiere grind en unas gafas.
 ## 5. Orden recomendado: tres entregas
 
 **Entrega 1 — «suena a Ace Combat»** (todo coste S).
-Elenco de radio con personajes, briefing y debriefing en el móvil, tonos y
-vibración. No se toca la física: se toca cómo se cuenta. Aquí está el grueso de
+Voz del sistema con amenazas y marcador, tarjeta de partida y debriefing, tonos
+y vibración. No se toca la física: se toca cómo se cuenta. Aquí está el grueso de
 la sensación y cuesta poco.
 
 **Entrega 2 — «cada ronda tiene motivo»** (coste M).

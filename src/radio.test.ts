@@ -24,6 +24,12 @@ function snap(over: Partial<RadioSnapshot> = {}): RadioSnapshot {
     lockPercent: 0,
     threatCallsign: null,
     threatPercent: 0,
+    score: 0,
+    kills: 0,
+    deaths: 0,
+    leaderCallsign: null,
+    leaderScore: 0,
+    primaryDone: false,
     contacts: [],
     ...over,
   }
@@ -320,5 +326,62 @@ describe('browserSpeaker', () => {
     const { synth, spoken } = fakeSynth()
     browserSpeaker(synth, () => null).say({ text: 'x', urgency: 'info', key: 'k' })
     expect(spoken).toEqual([])
+  })
+})
+
+describe('planRadio · el tablón', () => {
+  it('canta el derribo con los puntos', () => {
+    const line = planRadio(snap({ kills: 0, score: 0 }), snap({ kills: 1, score: 100 }))
+    expect(line).toEqual({
+      text: 'Derribo confirmado. 100 puntos.',
+      urgency: 'alert',
+      key: 'kill:1',
+    })
+  })
+
+  it('avisa de que te han derribado', () => {
+    const line = planRadio(snap({ deaths: 0 }), snap({ deaths: 1 }))
+    expect(line).toMatchObject({ urgency: 'alert', key: 'down' })
+    expect(line?.text).toContain('derribado')
+  })
+
+  it('la baja manda sobre el derribo si coinciden', () => {
+    const line = planRadio(snap({ deaths: 0, kills: 0 }), snap({ deaths: 1, kills: 2 }))
+    expect(line?.key).toBe('down')
+  })
+
+  it('anuncia cuando pasas a liderar', () => {
+    const line = planRadio(
+      snap({ leaderCallsign: 'GHOST-1', leaderScore: 300 }),
+      snap({ leaderCallsign: 'VIPER-1', leaderScore: 400 }),
+    )
+    expect(line).toEqual({ text: 'Lideras la ronda.', urgency: 'info', key: 'lead:me' })
+  })
+
+  it('anuncia quien lidera, con su nombre real', () => {
+    const line = planRadio(snap(), snap({ leaderCallsign: 'FLANKER-1', leaderScore: 200 }))
+    expect(line?.text).toBe('FLANKER-1 lidera con 200 puntos.')
+  })
+
+  it('no repite el liderato en cada tick', () => {
+    const line = planRadio(
+      snap({ leaderCallsign: 'FLANKER-1', leaderScore: 200 }),
+      snap({ leaderCallsign: 'FLANKER-1', leaderScore: 300 }),
+    )
+    expect(line).toBeNull()
+  })
+
+  it('celebra el objetivo primario una sola vez', () => {
+    expect(planRadio(snap(), snap({ primaryDone: true }))?.key).toBe('objective:primary')
+    expect(planRadio(snap({ primaryDone: true }), snap({ primaryDone: true }))).toBeNull()
+  })
+
+  it('al empezar ronda el marcador a cero no dice nada', () => {
+    // Un reinicio pone todo a cero: no es una baja ni un derribo.
+    const line = planRadio(
+      snap({ kills: 2, deaths: 1, score: 400 }),
+      snap({ kills: 0, deaths: 0, score: 0, phase: 'flying' }),
+    )
+    expect(line).toBeNull()
   })
 })

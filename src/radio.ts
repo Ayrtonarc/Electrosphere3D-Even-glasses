@@ -1,5 +1,10 @@
 /**
- * Radio de escuadron: voz sintetizada con el estilo de los juegos de cabina.
+ * Radio: la voz del sistema de a bordo.
+ *
+ * No hay personajes. Esto es jugador contra jugador, y nadie va a fingir un
+ * AWACS ni un companero de ala: habla el avion. Por eso todo lo que dice son
+ * hechos del tablon —quien te fija, cuantos puntos llevas, quien lidera— y
+ * nunca un guion.
  *
  * Se separa en dos mitades a proposito:
  *
@@ -45,6 +50,15 @@ export interface RadioSnapshot {
   lockPercent: number
   threatCallsign: string | null
   threatPercent: number
+  /** Marcador propio. */
+  score: number
+  kills: number
+  deaths: number
+  /** Cabeza de la tabla, si alguien ha puntuado. */
+  leaderCallsign: string | null
+  leaderScore: number
+  /** El objetivo primario de la ronda ya esta cumplido. */
+  primaryDone: boolean
   /** Contactos frescos, ordenados por distancia. */
   contacts: RadioContact[]
 }
@@ -71,6 +85,12 @@ export function snapshotOf(radar: RadarState | null, tracks: TrackedContact[]): 
     lockPercent: radar?.lock ? lockPercent(radar.lock.ms, radar.lock.needMs) : 0,
     threatCallsign: radar?.threat?.callsign ?? radar?.lockedBy ?? null,
     threatPercent: radar?.threat?.percent ?? 0,
+    score: radar?.you.score ?? 0,
+    kills: radar?.you.kills ?? 0,
+    deaths: radar?.you.deaths ?? 0,
+    leaderCallsign: radar?.leader?.callsign ?? null,
+    leaderScore: radar?.leader?.score ?? 0,
+    primaryDone: radar?.objectives?.some(o => o.kind === 'primary' && o.done) ?? false,
     contacts: fresh.map(t => ({
       callsign: t.callsign,
       aircraft: t.aircraft,
@@ -123,7 +143,31 @@ export function planRadio(prev: RadioSnapshot | null, next: RadioSnapshot): Radi
     return { text: 'Aeronet, en vuelo. Radar activo.', urgency: 'info', key: 'match:first' }
   }
 
-  // 3. Bloqueo propio.
+  // 3. El tablon: lo que ha cambiado en la ronda. Son hechos, no guion.
+  if (next.deaths > (prev?.deaths ?? 0)) {
+    return { text: 'Te han derribado. Vuelves en diez segundos.', urgency: 'alert', key: 'down' }
+  }
+  if (next.kills > (prev?.kills ?? 0)) {
+    return {
+      text: `Derribo confirmado. ${next.score} puntos.`,
+      urgency: 'alert',
+      key: `kill:${next.kills}`,
+    }
+  }
+  if (next.primaryDone && !prev?.primaryDone) {
+    return { text: 'Objetivo primario cumplido.', urgency: 'info', key: 'objective:primary' }
+  }
+  if (next.leaderCallsign && next.leaderCallsign !== prev?.leaderCallsign) {
+    return next.leaderCallsign === next.me
+      ? { text: 'Lideras la ronda.', urgency: 'info', key: 'lead:me' }
+      : {
+          text: `${next.leaderCallsign} lidera con ${next.leaderScore} puntos.`,
+          urgency: 'info',
+          key: `lead:${next.leaderCallsign}`,
+        }
+  }
+
+  // 4. Bloqueo propio.
   if (next.lockCallsign && next.lockCallsign !== prev?.lockCallsign) {
     return {
       text: `Fijando ${next.lockCallsign}.`,
@@ -139,7 +183,7 @@ export function planRadio(prev: RadioSnapshot | null, next: RadioSnapshot): Radi
     }
   }
 
-  // 4. Contactos nuevos y perdidos.
+  // 5. Contactos nuevos y perdidos.
   const before = new Set((prev?.contacts ?? []).map(c => c.callsign))
   const added = next.contacts.find(c => !before.has(c.callsign))
   if (added) {
