@@ -1,0 +1,47 @@
+/**
+ * Ficha táctica de la aeronave que llevas.
+ *
+ * Los números que importan no son los del catalogo (`radar: 1`, `rcs: 0.001`)
+ * sino los que salen de cruzarlos con las reglas: a cuantos metros ves y a
+ * cuantos te ven. Es la misma cuenta que hace el servidor, asi que lo que lees
+ * en el movil es lo que se aplica en la ronda.
+ */
+
+import { AIRCRAFT, BASE_KM, VISUAL_RANGE_KM, type AircraftId } from './types'
+import { detectRangeKm, formatKm } from './geo'
+
+/**
+ * RCS del blanco mas ruidoso del juego (Su-27). Se usa como escaparate del
+ * alcance propio: es el mejor caso, y asi el numero no enganna.
+ */
+const LOUDEST_RCS = 12
+
+/** Radar de referencia para responder a "a que distancia me ven". */
+const REFERENCE_RADAR = 1
+
+export type StatId = 'rcs' | 'radar' | 'lock' | 'seen'
+
+export interface Stat {
+  id: StatId
+  label: string
+  value: string
+}
+
+/** Nombre y papel, para la cabecera de la ficha. */
+export function aircraftTitle(id: AircraftId): string {
+  const me = AIRCRAFT[id]
+  return `${me.name} · ${me.role}`
+}
+
+export function aircraftStats(id: AircraftId): Stat[] {
+  const me = AIRCRAFT[id]
+  const radarKm = detectRangeKm(me.radar, LOUDEST_RCS, BASE_KM, VISUAL_RANGE_KM)
+  const seenKm = detectRangeKm(REFERENCE_RADAR, me.rcs, BASE_KM, VISUAL_RANGE_KM)
+
+  return [
+    { id: 'rcs', label: 'RCS', value: `${me.rcs} m²` },
+    { id: 'radar', label: 'Radar', value: formatKm(radarKm) },
+    { id: 'lock', label: 'Fija en', value: `${me.lockSeconds} s` },
+    { id: 'seen', label: 'Te ven a', value: formatKm(seenKm) },
+  ]
+}

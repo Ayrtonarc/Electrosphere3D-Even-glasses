@@ -212,8 +212,11 @@ describe('renderHud · ficha del avion', () => {
   it('resume radio, firma y tiempo de bloqueo en lineas cortas', () => {
     const hud = renderHud(input({ view: 'info' }))
     expect(hud.alert).toBe('F-35 · Sigilo')
+    expect(hud.detail).toContain('F-35 · SIGILO')
     expect(hud.detail).toContain('Fija en 18 s')
     expect(hud.detail).toContain('RCS 0.001 m²')
+    expect(hud.detail).toContain('Radar 480 m')
+    expect(hud.detail).toContain('Te ven a 90 m')
     expect(hud.info).toBe('F-35\nR 480 m')
     expect(hud.footer).toBe('5:00 · 2v: alcance · TAP: radar')
   })

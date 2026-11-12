@@ -11,6 +11,7 @@ import {
   type PlayerRecord,
   type StorageLike,
 } from './record'
+import { aircraftStats, aircraftTitle } from './stats'
 
 export interface UiHandlers {
   onConnect: (url: string, callsign: string, aircraft: AircraftId) => void
@@ -100,6 +101,7 @@ export function mountUi(handlers: UiHandlers): Ui {
   const linkEl = $<HTMLSpanElement>('#link')
   const radioEl = $<HTMLButtonElement>('#radio')
   const objectivesEl = $<HTMLDivElement>('#objectives')
+  const statsEl = $<HTMLDivElement>('#stats')
   const locationEl = $<HTMLDivElement>('#location')
   const gpsEl = $<HTMLSpanElement>('#gps')
   const contactsEl = $<HTMLUListElement>('#contacts')
@@ -156,6 +158,7 @@ export function mountUi(handlers: UiHandlers): Ui {
       if (connected) return
       aircraft = id
       renderCards()
+      renderStats()
       persist()
       handlers.onAircraft(id)
     })
@@ -168,6 +171,30 @@ export function mountUi(handlers: UiHandlers): Ui {
     }
   }
   renderCards()
+
+  /**
+   * Ficha del avion que llevas. Los valores se calculan con las mismas reglas
+   * que aplica el servidor, asi que no son decorativos.
+   */
+  function renderStats() {
+    statsEl.title = aircraftTitle(aircraft)
+    statsEl.replaceChildren()
+
+    for (const stat of aircraftStats(aircraft)) {
+      const row = document.createElement('div')
+      row.className = 'stat'
+
+      const label = document.createElement('span')
+      label.textContent = stat.label
+
+      const value = document.createElement('b')
+      value.textContent = stat.value
+
+      row.append(label, value)
+      statsEl.appendChild(row)
+    }
+  }
+  renderStats()
 
   callsignEl.addEventListener('change', persist)
 

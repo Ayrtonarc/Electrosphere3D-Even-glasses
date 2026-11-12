@@ -217,8 +217,7 @@
       button.ghost.is-off { color: var(--muted); border-style: dashed; }
 
       /* ── Objetivos de la ronda ─────────────────────────────── */
-      .objectives { display: flex; flex-direction: column; gap: 4px; }
-      .objectives .score {
+      .objectives { display: flex; flex-direction: column; gap: 4px; }      .objectives .score {
         font-size: 12px;
         font-weight: 600;
         color: var(--accent);
@@ -234,6 +233,27 @@
       }
       .objectives .obj.is-primary { color: var(--warn); }
       .objectives .obj.is-done { color: var(--accent); text-decoration: line-through; }
+
+      /* ── Ficha del avion que llevas ────────────────────────── */
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px 14px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .stats .stat {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid #2c2c2c;
+        padding-bottom: 3px;
+      }
+      .stats .stat b {
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
 
       /* ── Lobby ────────────────────────────────────────────────── */
       .field { display: flex; flex-direction: column; gap: 6px; }
@@ -351,6 +371,8 @@
           <canvas id="radar" width="260" height="260" aria-label="Radar táctico"></canvas>
 
           <ul id="contacts" class="contacts" aria-live="polite"></ul>
+
+          <div id="stats" class="stats"></div>
 
           <div id="result" class="result" hidden></div>
 

@@ -1,13 +1,12 @@
 import {
   ALERT_METERS,
   AIRCRAFT,
-  BASE_KM,
-  VISUAL_RANGE_KM,
   type AircraftId,
   type ConnState,
   type RadarState,
 } from './types'
-import { detectRangeKm, formatKm } from './geo'
+import { formatKm } from './geo'
+import { aircraftStats, aircraftTitle } from './stats'
 import type { TrackedContact } from './track'
 
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖']
@@ -178,17 +177,15 @@ export function renderHud(input: HudInput): HudTexts {
     info = `${me.name}\nR ${formatKm(rangeKm)}`
     footer = `Nueva partida en ${Math.ceil(remainingMs / 1000)} s`
   } else if (view === 'info') {
-    const seenAt = detectRangeKm(1, me.rcs, BASE_KM, VISUAL_RANGE_KM)
-    const myRange = detectRangeKm(me.radar, 12, BASE_KM, VISUAL_RANGE_KM)
+    // Misma fuente que la ficha del movil: si cambia la formula, cambian las dos.
+    const stats = aircraftStats(aircraft)
+    const range = stats.find(s => s.id === 'radar')?.value ?? '—'
     detail = [
-      `${me.name} ${me.role.toUpperCase()}`,
-      `Fija en ${me.lockSeconds} s`,
-      `Radio ${formatKm(myRange)}`,
-      `RCS ${me.rcs} m²`,
-      `Te ven a ${formatKm(seenAt)}`,
+      aircraftTitle(aircraft).toUpperCase(),
+      ...stats.map(s => `${s.label} ${s.value}`),
       gpsSimulated ? 'GPS simulado' : 'GPS activo',
     ].join('\n')
-    info = `${me.name}\nR ${formatKm(myRange)}`
+    info = `${me.name}\nR ${range}`
     footer = `${clock(remainingMs)} · 2v: alcance · TAP: radar`
   } else {
     const lines: string[] = []
