@@ -118,7 +118,7 @@ describe('renderHud · radar', () => {
     expect(hud.alert).toBe('0 CONTACTOS')
     expect(hud.detail).toBe('SIN CONTACTOS\n\nMuevete para barrer.')
     expect(hud.info).toBe('F-35\nR 480 m')
-    expect(hud.footer).toBe('5:00 · 2v: blanco · mant: silencio')
+    expect(hud.footer).toBe('5:00 · 0 PTS · 2v: blanco')
   })
 
   it('singular cuando hay un solo contacto', () => {
@@ -253,12 +253,12 @@ describe('renderHud · amenaza y rango', () => {
       input({
         radar: radar({
           phase: 'finished',
-          result: { winner: 'VIPER-1', reason: 'bloqueo sobre FLANKER-1', rank: 'S', score: 100 },
+          result: { winner: 'VIPER-1', reason: 'puntuación', rank: 'S', points: 400 },
         }),
       }),
     )
     expect(hud.alert).toBe('VICTORIA · S')
-    expect(hud.detail).toContain('RANGO S · 100%')
+    expect(hud.detail).toContain('RANGO S · 400 PTS')
     expect(hud.detail).toContain('BLANCO DERRIBADO')
   })
 
@@ -267,12 +267,12 @@ describe('renderHud · amenaza y rango', () => {
       input({
         radar: radar({
           phase: 'finished',
-          result: { winner: null, reason: 'tiempo agotado', rank: 'D', score: 0 },
+          result: { winner: null, reason: 'tiempo agotado', rank: 'D', points: 0 },
         }),
       }),
     )
     expect(hud.alert).toBe('EMPATE · D')
-    expect(hud.detail).toContain('RANGO D · 0%')
+    expect(hud.detail).toContain('RANGO D · 0 PTS')
   })
 
   it('sin rango (servidor viejo) el aviso queda como estaba', () => {
@@ -299,7 +299,7 @@ describe('renderHud · tarjeta de ronda', () => {
           phase: 'finished',
           round: 3,
           scenario: duelo,
-          result: { winner: 'VIPER-1', reason: 'bloqueo sobre FLANKER-1', rank: 'S', score: 100 },
+          result: { winner: 'VIPER-1', reason: 'puntuación', rank: 'S', points: 400 },
         }),
       }),
     )
@@ -317,5 +317,75 @@ describe('renderHud · tarjeta de ronda', () => {
       }),
     )
     expect(hud.detail).not.toContain('RONDA')
+  })
+})
+
+describe('renderHud · marcador y objetivos', () => {
+  const you = { callsign: 'VIPER-1', aircraft: 'f35' as const, lat: 0, lon: 0 }
+
+  it('el objetivo primario ocupa el aviso cuando no hay nada urgente', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          objectives: [
+            { id: 'kills', kind: 'primary', label: 'DERRIBA 2', progress: 1, target: 2, done: false },
+          ],
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('DERRIBA 2 · 1/2')
+  })
+
+  it('la puntuacion va en el pie', () => {
+    const hud = renderHud(input({ radar: radar({ you: { ...you, score: 300, kills: 2 } }) }))
+    expect(hud.footer).toBe('5:00 · 300 PTS · 2v: blanco')
+  })
+
+  it('derribado manda sobre cualquier otro aviso', () => {
+    const hud = renderHud(
+      input({
+        radar: radar({
+          you: { ...you, downMs: 7400 },
+          lockedBy: 'GHOST-1',
+          threat: { callsign: 'GHOST-1', percent: 90 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('DERRIBADO · 8 s')
+  })
+
+  it('el misil señala de donde viene', () => {
+    // Rumbo 0 y amenaza por el este: la flecha apunta a la derecha.
+    const hud = renderHud(
+      input({
+        headingDeg: 0,
+        radar: radar({
+          lockedBy: 'GHOST-1',
+          threat: { callsign: 'GHOST-1', percent: 80, bearingDeg: 90 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('!! MISSILE → GHOST-1')
+  })
+
+  it('la flecha es relativa al morro, no a la brujula', () => {
+    // Misma amenaza al este, pero mirando al este: la tienes de frente.
+    const hud = renderHud(
+      input({
+        headingDeg: 90,
+        radar: radar({
+          lockedBy: 'GHOST-1',
+          threat: { callsign: 'GHOST-1', percent: 80, bearingDeg: 90 },
+        }),
+      }),
+    )
+    expect(hud.alert).toBe('!! MISSILE ↑ GHOST-1')
+  })
+
+  it('sin marcacion no se inventa flecha', () => {
+    const hud = renderHud(
+      input({ radar: radar({ lockedBy: 'GHOST-1', threat: { callsign: 'GHOST-1', percent: 80 } }) }),
+    )
+    expect(hud.alert).toBe('!! MISSILE · GHOST-1')
   })
 })

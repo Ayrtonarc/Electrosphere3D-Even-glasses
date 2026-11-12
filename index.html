@@ -216,6 +216,25 @@
       .footbtns { display: flex; gap: 8px; }
       button.ghost.is-off { color: var(--muted); border-style: dashed; }
 
+      /* ── Objetivos de la ronda ─────────────────────────────── */
+      .objectives { display: flex; flex-direction: column; gap: 4px; }
+      .objectives .score {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      .objectives .obj {
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .objectives .obj.is-primary { color: var(--warn); }
+      .objectives .obj.is-done { color: var(--accent); text-decoration: line-through; }
+
       /* ── Lobby ────────────────────────────────────────────────── */
       .field { display: flex; flex-direction: column; gap: 6px; }
 
@@ -316,6 +335,8 @@
             <span id="link" class="chip" hidden></span>
             <span id="timer" class="timer">--:--</span>
           </div>
+
+          <div id="objectives" class="objectives"></div>
 
           <div id="lockwrap" class="lockwrap" hidden>
             <div class="locktop">

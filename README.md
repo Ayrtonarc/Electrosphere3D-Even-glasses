@@ -33,8 +33,20 @@ el tráfico WebSocket.
 
 ## Reglas de partida
 
+- **Es una carrera de puntos:** 5 minutos por ronda y gana quien más puntos
+  sume. Un derribo no termina la ronda, suma.
+- **Marcador:** derribo `+100`, morir `−50` (sin bajar de cero). El derribado se
+  queda **fuera de juego 10 s**: no fija, no se le ve y el HUD avisa
+  `DERRIBADO · 7 s`.
+- **Objetivos:** cada ronda reparte uno primario y dos secundarios que pagan
+  bonus una sola vez.
+  - **◆ DERRIBA 2** `+200` — el primario.
+  - **◇ FIJA 3 BLANCOS** distintos `+100`.
+  - **◇ SIN QUE TE DERRIBEN** `+100` al terminar (solo cuenta si has derribado
+    algo: esconderse sin disparar no da premio).
 - **Duelo de bloqueo:** mantén fijado tu blanco. Si no eliges, se bloquea el
-  contacto visible más cercano. Si pierdes el fijado, el contador vuelve a cero.
+  contacto visible más cercano, y **no cambia** porque pase alguien más cerca:
+  cambiar de blanco es cosa tuya.
 - **Elegir blanco:** con la rueda en la vista de radar. Si el elegido deja de
   verse, se suelta y vuelve el automático al tick siguiente.
 - **Modo silencio:** pulsación larga. Apagar el radar te hace difícil de ver,
@@ -44,11 +56,12 @@ el tráfico WebSocket.
   menos de `lock.rangeM` (250 m) y dentro de un cono de `lock.fovDeg` (90°)
   respecto al rumbo. Sin rumbo fiable (móvil parado, GPS sin `heading`) se
   permite 360° para que el juego siga siendo jugable.
-- **5 minutos:** al agotarse el tiempo gana quien tenga más bloqueo acumulado.
 - **Los bots también disparan:** si te acercas a menos de `bots.engageRangeM`
-  (200 m) te fijan, y al 70 % de su bloqueo el aviso pasa a `MISSILE`. Se
-  defienden apagando el radar (su alcance baja al 60 %) o cazándolos antes.
-- **Reinicio:** 12 s de marcador y empieza otra partida.
+  (200 m) te fijan, y al 70 % de su bloqueo el aviso pasa a `MISSILE` con la
+  flecha de por dónde viene. Se defienden apagando el radar (su alcance baja al
+  60 %) o cazándolos antes. Al derribarlos desaparecen 30 s, que si no se
+  podrían farmear en la misma órbita.
+- **Reinicio:** 12 s de marcador y empieza otra ronda.
 - **Memoria de pings:** un contacto que dejas de ver no desaparece de golpe;
   queda 15 s como última posición conocida (`? Su-27 320m 8s`).
 
@@ -110,15 +123,19 @@ de texto, la pantalla se pinta entera y el texto va dentro del canvas.
   aparecen como flecha en el borde con su distancia real.
 - **Blanco fijado:** corchetes con el progreso de bloqueo en arco, la distancia,
   el cierre y la **altitud relativa** (`A+12m`).
-- **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN · X`, `!! MISSILE · X`
-  cuando el que te fija pasa del 70 % de su bloqueo, o `BLOQUEANDO · X`;
-  parpadea cuando es una amenaza.
-- **Resultado:** `VICTORIA · S` / `GANA X` / `EMPATE · D`, la línea
-  `RONDA 3 · DUELO` y la cuenta atrás, en panel centrado. La nota sale del mejor
-  bloqueo de la partida contra lo que pide tu avión: **S** derribo, **A** victoria
-  por tiempo, **B** ≥75 %, **C** ≥35 %, **D** el resto.
+- **Aviso:** `! F-35 A 90 m` (amenaza), `!! TE BLOQUEAN ← · X`,
+  `!! MISSILE ← X` cuando el que te fija pasa del 70 % de su bloqueo —la flecha
+  apunta al atacante **relativa a tu morro**, o a la brújula si no hay rumbo—,
+  `DERRIBADO · 7 s` y `BLOQUEANDO · X`. Cuando no pasa nada urgente, el aviso
+  lo ocupa el objetivo primario: `DERRIBA 2 · 1/2`.
+- **Puntuación:** en el pie, `4:56 · 300 PTS · 2v: blanco`; en el móvil, el
+  marcador completo con derribos y bajas sobre la lista de objetivos.
+- **Resultado:** `VICTORIA · S` / `GANA X` / `EMPATE · D`, `RANGO S · 500 PTS`,
+  `RONDA 3 · DUELO` y la cuenta atrás, en panel centrado. La nota sale de los
+  puntos: **S** ganar con 400 o más, **A** ganar con menos, **B** ≥75 % del
+  líder, **C** haber puntuado, **D** nada.
 - **Tarjeta de la ronda siguiente:** en los 12 s de marcador, el móvil añade
-  `Siguiente · ronda 4 · Duelo — Gana quien cierra el primer bloqueo · en 9 s`.
+  `Siguiente · ronda 4 · Duelo — Gana quien mas puntos sume en 5 minutos · en 9 s`.
   El número de ronda y el escenario los manda el servidor, así que los ocho
   jugadores leen exactamente lo mismo.
 - **Récord:** el móvil guarda rondas jugadas, victorias, racha y mejor nota en
@@ -204,7 +221,7 @@ npm run test:watch
 | `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
 | `src/radio.test.ts` | guion de radio (prioridades, transiciones, contactos) y huecos entre frases |
 | `src/record.test.ts` | récord local: idempotencia por ronda, rachas, mejor nota y almacenamiento corrupto |
-| `server/rules.test.mjs` | visibilidad por RCS, bloqueo y reinicio de contador, victoria, tiempo agotado, sala vacía, rango, amenaza y bots que fijan |
+| `server/rules.test.mjs` | visibilidad por RCS, bloqueo, rango, amenaza, puntos y objetivos, bots que fijan |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 
 Las reglas viven en `server/rules.mjs` sin red ni relojes propios (el tiempo se
@@ -257,9 +274,8 @@ build` también comprueba los tipos de los tests.
   una y apilar a todos los jugadores en el mismo punto.
 - El bucle de render es de 1 Hz a propósito: cada actualización viaja por el
   enlace con el móvil.
-- Cuando un bot cierra su bloqueo, la partida se cierra **después** de montar
-  los payloads: el resultado le llega al jugador un tick (1 s) más tarde. Es a
-  propósito, para que quien cierra su bloqueo en ese mismo tick gane el empate.
+- La puntuación y los objetivos los calcula el servidor: el cliente no puede
+  acreditarse un derribo ni darse un bonus.
 - Los bots fijan con un alcance plano y sin cono de visión: a diferencia de los
   jugadores, les da igual hacia dónde mires tú.
 - La voz depende del motor del sistema (`speechSynthesis`). En iOS necesita el

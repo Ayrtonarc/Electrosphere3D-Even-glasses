@@ -106,6 +106,23 @@ export function createRules(cfg) {
   const BOT_COOLDOWN_MS = (BOT_CFG.cooldownSeconds ?? 12) * 1000
   const botNeedMs = bot => lockOf(bot.aircraft) * 1000 * BOT_LOCK_MULT
 
+  // ── Puntuacion ──────────────────────────────────────────────────────────
+  // La ronda no termina con el primer derribo: es una carrera de puntos. El
+  // derribo suma, morir resta, y los objetivos pagan bonus una sola vez.
+  const POINTS = { kill: cfg.points?.kill ?? 100, death: cfg.points?.death ?? 50 }
+  /** Tiempo fuera de juego tras ser derribado. */
+  const RESPAWN_MS = (cfg.respawnSeconds ?? 10) * 1000
+  /** Los bots no mueren: se retiran un rato para que no se puedan farmear. */
+  const BOT_DOWN_MS = (cfg.botDownSeconds ?? 30) * 1000
+
+  const OBJECTIVES = (
+    cfg.objectives ?? [
+      { id: 'kills', kind: 'primary', label: 'DERRIBA 2', target: 2, bonus: 200 },
+      { id: 'hunt', kind: 'secondary', label: 'FIJA 3 BLANCOS', target: 3, bonus: 100 },
+      { id: 'clean', kind: 'secondary', label: 'SIN QUE TE DERRIBEN', target: 1, bonus: 100, atEnd: true },
+    ]
+  ).map(o => ({ atEnd: false, ...o }))
+
   /**
    * Silencio radar: apagarlo te hace dificil de ver, pero tu tambien ves menos.
    * El suelo visual sigue mandando, asi que nadie desaparece a menos de 90 m.
@@ -151,6 +168,70 @@ export function createRules(cfg) {
      */
     const botLocks = new Map()
 
+    /** Bots retirados tras ser derribados: callsign -> instante de vuelta. */
+    const botDown = new Map()
+
+    function downPlayer(player, at) {
+      player.downUntil = at + RESPAWN_MS
+      player.deaths += 1
+      player.score = Math.max(0, player.score - POINTS.death)
+      player.lock = { id: null, ms: 0 }
+    }
+
+    /** Un derribo: cobra el atacante y saca al blanco de la ronda un rato. */
+    function awardKill(killer, contact, at) {
+      killer.score += POINTS.kill
+      killer.kills += 1
+      killer.lock = { id: null, ms: 0 }
+
+      if (contact.kind === 'bot') {
+        // Sin esto se podria farmear al mismo bot en cada pasada: su orbita es
+        // siempre la misma, asi que volveria a estar a tiro en segundos.
+        botDown.set(contact.callsign, at + BOT_DOWN_MS)
+        botLocks.delete(contact.callsign)
+        return
+      }
+
+      const victim = players.get(contact.id)
+      if (victim) downPlayer(victim, at)
+    }
+
+    function progressOf(me, objective) {
+      switch (objective.id) {
+        case 'kills':
+          return me.kills
+        case 'hunt':
+          return me.targets.size
+        case 'clean':
+          // Morir resta, pero no matar tambien: si no, esconderse sin disparar
+          // un tiro daria bonus y ganaria la ronda.
+          return me.deaths === 0 && me.kills > 0 ? 1 : 0
+        default:
+          return 0
+      }
+    }
+
+    /** Objetivos con su progreso, listos para pintar. */
+    function objectivesFor(me) {
+      return OBJECTIVES.map(o => {
+        const progress = Math.min(o.target, progressOf(me, o))
+        // Los de final no se dan por cumplidos hasta que termina la ronda.
+        const done = progress >= o.target && (!o.atEnd || match.phase === 'finished')
+        return { id: o.id, kind: o.kind, label: o.label, progress, target: o.target, done }
+      })
+    }
+
+    /** Paga los bonus cumplidos que aun no se hayan pagado. */
+    function payObjectives(me, atEnd) {
+      for (const o of OBJECTIVES) {
+        if (!!o.atEnd !== atEnd) continue
+        if (me.awarded.has(o.id)) continue
+        if (progressOf(me, o) < o.target) continue
+        me.score += o.bonus
+        me.awarded.add(o.id)
+      }
+    }
+
     function botState(bot) {
       let st = botLocks.get(bot.callsign)
       if (!st) {
@@ -161,12 +242,10 @@ export function createRules(cfg) {
     }
 
     /**
-     * Un turno de bots. Devuelve el derribo que hayan cerrado, si hay alguno,
-     * pero **no** termina la partida: el que llama decide, para que un jugador
-     * que cierra su bloqueo en el mismo tick gane el empate.
+     * Un turno de bots. Derriba directamente: como la ronda ya no se acaba con
+     * el primer derribo, no hace falta diferir nada.
      */
     function updateBots(botList, humans, at) {
-      let kill = null
       const warm = at - match.startedAt < BOT_WARMUP_MS
 
       for (const bot of botList) {
@@ -205,15 +284,12 @@ export function createRules(cfg) {
         st.ms += TICK_MS
 
         if (st.ms >= botNeedMs(bot)) {
-          if (!kill) kill = { callsign: bot.callsign, victim: victim.callsign }
-          // El estado se limpia en el tick siguiente, cuando la partida ya esta
-          // terminada: asi el aviso llega al 100 % en vez de desaparecer justo
-          // antes del derribo.
+          downPlayer(victim, at)
+          st.targetId = null
+          st.ms = 0
           st.cooldownUntil = at + BOT_COOLDOWN_MS
         }
       }
-
-      return kill
     }
 
     function startMatch(at) {
@@ -227,11 +303,17 @@ export function createRules(cfg) {
       }
       for (const p of players.values()) {
         p.lock = { id: null, ms: 0 }
-        // Mejor bloqueo de la partida: el rango se calcula con esto, asi que
-        // perder el blanco y recuperarlo no borra lo ya conseguido.
+        // Mejor bloqueo de la partida, para el rango final.
         p.bestMs = 0
+        p.score = 0
+        p.kills = 0
+        p.deaths = 0
+        p.downUntil = 0
+        p.targets = new Set()
+        p.awarded = new Set()
       }
       botLocks.clear()
+      botDown.clear()
     }
 
     function finishMatch(winner, reason, at) {
@@ -247,18 +329,23 @@ export function createRules(cfg) {
     }
 
     /**
-     * Nota de la partida, estilo arcade, a partir del mejor bloqueo contra lo
-     * que pedia tu avion. S es derribo, A victoria por tiempo, B/D segun lo
-     * cerca que te quedaste. Se calcula por jugador: el `result` de cada
-     * payload lleva el suyo.
+     * Nota de la partida a partir de los puntos y de la cabeza de la tabla.
+     * S exige ganar con 400 (dos derribos y el primario), A ganar de cualquier
+     * forma, B acercarse al lider, C haber rascado algo y D nada.
      */
-    function rankOf(me) {
-      const needMs = lockOf(me.aircraft) * 1000
-      const bestMs = me.bestMs ?? 0
-      const score = needMs > 0 ? Math.min(100, Math.round((bestMs / needMs) * 100)) : 0
+    function rankOf(me, topScore) {
+      const points = me.score ?? 0
       const won = match.winner === me.callsign
-      const rank = won ? (bestMs >= needMs ? 'S' : 'A') : score >= 75 ? 'B' : score >= 35 ? 'C' : 'D'
-      return { rank, score }
+      const rank = won
+        ? points >= 400
+          ? 'S'
+          : 'A'
+        : topScore > 0 && points >= topScore * 0.75
+          ? 'B'
+          : points > 0
+            ? 'C'
+            : 'D'
+      return { rank, points }
     }
 
     function join(id, info) {
@@ -274,6 +361,16 @@ export function createRules(cfg) {
         lock: { id: null, ms: 0 },
         /** Mejor bloqueo de la partida, para el rango final. */
         bestMs: 0,
+        /** Marcador de la ronda: puntos, derribos y bajas. */
+        score: 0,
+        kills: 0,
+        deaths: 0,
+        /** Hasta cuando esta fuera de juego por haber sido derribado. */
+        downUntil: 0,
+        /** Blancos distintos que ha llegado a fijar (objetivo secundario). */
+        targets: new Set(),
+        /** Bonus de objetivos ya cobrados. */
+        awarded: new Set(),
         /** Radar encendido: apagarlo es la unica forma de pasar desapercibido. */
         emitting: true,
         /** Blanco elegido a mano; `null` = automatico al mas cercano. */
@@ -347,26 +444,33 @@ export function createRules(cfg) {
     function tick() {
       const at = now()
       prune(60_000)
-      const humans = [...players.values()].filter(p => p.lat !== null)
-      bots = botsAt(anchor, (at - anchorAt) / 1000)
 
-      const targets = [...humans, ...bots]
+      const humans = [...players.values()].filter(p => p.lat !== null)
+      // Los derribados siguen viendo el radar, pero no son objetivo de nadie ni
+      // pueden fijar hasta que se recuperan.
+      const alive = humans.filter(p => at >= (p.downUntil ?? 0))
+      bots = botsAt(anchor, (at - anchorAt) / 1000).filter(b => at >= (botDown.get(b.callsign) ?? 0))
+
+      const targets = [...alive, ...bots]
       const maxRcs = targets.reduce((acc, t) => Math.max(acc, rcsOf(t.aircraft)), 1e-6)
 
       if (match.endsAt === 0) {
         if (humans.length > 0) startMatch(at)
       } else if (match.phase === 'flying' && at >= match.endsAt) {
-        const best = humans.slice().sort((a, b) => (b.lock?.ms ?? 0) - (a.lock?.ms ?? 0))[0]
-        finishMatch(best && (best.lock?.ms ?? 0) > 0 ? best.callsign : null, 'tiempo agotado', at)
+        // Los objetivos de final se pagan antes de decidir el ganador.
+        for (const p of humans) payObjectives(p, true)
+        const best = humans.slice().sort((a, b) => b.score - a.score)[0]
+        const winner = best && best.score > 0 ? best.callsign : null
+        finishMatch(winner, winner ? 'puntuación' : 'tiempo agotado', at)
       } else if (match.phase === 'finished' && at >= match.endsAt) {
         startMatch(at)
       }
 
-      // Los bots eligen blanco antes de montar los payloads: el aviso tiene que
-      // salir en el mismo tick en que empiezan a fijar. El derribo, en cambio,
-      // se aplica al final para que un jugador que cierra su bloqueo en este
-      // mismo tick gane el empate.
-      const botKill = updateBots(bots, humans, at)
+      updateBots(bots, alive, at)
+
+      const leader = humans.slice().sort((a, b) => b.score - a.score)[0]
+      const topScore = leader?.score ?? 0
+      const leaderPayload = topScore > 0 ? { callsign: leader.callsign, score: topScore } : null
 
       const payloads = []
 
@@ -392,13 +496,19 @@ export function createRules(cfg) {
 
         // Bloqueo: el blanco elegido, o el mas cercano si no se ha elegido nada.
         let lock = null
-        if (match.phase === 'flying') {
-          // Solo se fija lo que se ve: dentro del cono y a distancia visual.
-          let target = contacts.find(c => c.visual) ?? null
+        const flying = match.phase === 'flying' && at >= (me.downUntil ?? 0)
+        if (flying) {
+          // El blanco actual manda mientras siga a la vista: si pasa alguien
+          // mas cerca, cambiar de golpe reinicia el contador y el jugador no
+          // entiende por que. Para cambiar de blanco esta la rueda.
+          const keep = me.lock.id ? contacts.find(c => c.id === me.lock.id && c.visual) : null
+          let target = keep ?? null
           if (me.targetId) {
             target = contacts.find(c => c.id === me.targetId && c.visual) ?? null
             // Si el elegido ya no aparece en el radar, se suelta para no quedarse clavado.
             if (!contacts.some(c => c.id === me.targetId)) me.targetId = null
+          } else if (!target) {
+            target = contacts.find(c => c.visual) ?? null
           }
           if (!target) {
             me.lock = { id: null, ms: 0 }
@@ -411,18 +521,26 @@ export function createRules(cfg) {
           if (target) {
             const needMs = lockOf(me.aircraft) * 1000
             if (me.lock.ms > me.bestMs) me.bestMs = me.lock.ms
+            me.targets.add(target.id)
             lock = { callsign: target.callsign, aircraft: target.aircraft, ms: me.lock.ms, needMs }
-            if (me.lock.ms >= needMs) finishMatch(me.callsign, `bloqueo sobre ${target.callsign}`, at)
+            // El derribo cobra y sigue la ronda: esto es una carrera de puntos.
+            if (me.lock.ms >= needMs) awardKill(me, target, at)
           }
+
+          payObjectives(me, false)
+        } else if (match.phase === 'flying') {
+          me.lock = { id: null, ms: 0 }
         }
 
-        const lockedByPlayer = humans.find(other => other !== me && other.lock?.id === me.id)
+        const lockedByPlayer = alive.find(other => other !== me && other.lock?.id === me.id)
         // Amenazas de jugadores y de bots en la misma lista: manda la que este
         // mas cerca de cerrarse, sea de quien sea.
         const threats = []
         if (lockedByPlayer) {
           threats.push({
             callsign: lockedByPlayer.callsign,
+            // Hacia donde esta el que te fija, para que el aviso pueda señalar.
+            bearingDeg: Math.round(bearingDeg(me, lockedByPlayer)),
             percent: Math.round(
               Math.min(100, (lockedByPlayer.lock.ms / (lockOf(lockedByPlayer.aircraft) * 1000)) * 100),
             ),
@@ -433,6 +551,7 @@ export function createRules(cfg) {
           if (!st || st.targetId !== me.id || st.ms <= 0) continue
           threats.push({
             callsign: bot.callsign,
+            bearingDeg: Math.round(bearingDeg(me, bot)),
             percent: Math.round(Math.min(100, (st.ms / botNeedMs(bot)) * 100)),
           })
         }
@@ -460,23 +579,24 @@ export function createRules(cfg) {
               lon: me.lon,
               emitting: me.emitting !== false,
               targetId: me.targetId,
+              score: me.score,
+              kills: me.kills,
+              deaths: me.deaths,
+              /** Milisegundos que le quedan fuera de juego; 0 si esta en vuelo. */
+              downMs: Math.max(0, (me.downUntil ?? 0) - at),
             },
+            objectives: objectivesFor(me),
+            leader: leaderPayload,
             rangeKm: Math.max(VISUAL_KM, BASE_KM * radarOf(me.aircraft) * Math.pow(maxRcs, 0.25)),
             lock,
             lockedBy,
             threat,
             result:
               match.phase === 'finished'
-                ? { winner: match.winner, reason: match.reason, ...rankOf(me) }
+                ? { winner: match.winner, reason: match.reason, ...rankOf(me, topScore) }
                 : null,
           },
         })
-      }
-
-      // Derribo de un bot: la partida se cierra despues de los payloads, asi que
-      // el resultado del jugador llega en el tick siguiente (1 s).
-      if (botKill && match.phase === 'flying') {
-        finishMatch(botKill.callsign, `bloqueo sobre ${botKill.victim}`, at)
       }
 
       return { match, payloads }

@@ -12,8 +12,16 @@
   "scenario": {
     "id": "duel",
     "name": "Duelo",
-    "rule": "Gana quien cierra el primer bloqueo"
+    "rule": "Gana quien mas puntos sume en 5 minutos"
   },
+  "points": { "kill": 100, "death": 50 },
+  "respawnSeconds": 10,
+  "botDownSeconds": 30,
+  "objectives": [
+    { "id": "kills", "kind": "primary", "label": "DERRIBA 2", "target": 2, "bonus": 200 },
+    { "id": "hunt", "kind": "secondary", "label": "FIJA 3 BLANCOS", "target": 3, "bonus": 100 },
+    { "id": "clean", "kind": "secondary", "label": "SIN QUE TE DERRIBEN", "target": 1, "bonus": 100, "atEnd": true }
+  ],
   "bots": {
     "engageRangeM": 200,
     "silentFactor": 0.6,

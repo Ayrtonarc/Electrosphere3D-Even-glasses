@@ -99,6 +99,7 @@ export function mountUi(handlers: UiHandlers): Ui {
   const disconnectEl = $<HTMLButtonElement>('#disconnect')
   const linkEl = $<HTMLSpanElement>('#link')
   const radioEl = $<HTMLButtonElement>('#radio')
+  const objectivesEl = $<HTMLDivElement>('#objectives')
   const locationEl = $<HTMLDivElement>('#location')
   const gpsEl = $<HTMLSpanElement>('#gps')
   const contactsEl = $<HTMLUListElement>('#contacts')
@@ -194,6 +195,7 @@ export function mountUi(handlers: UiHandlers): Ui {
     warnEl.classList.remove('is-missile')
     resultEl.hidden = true
     contactsEl.replaceChildren()
+    objectivesEl.replaceChildren()
     drawEmpty()
   }
 
@@ -253,6 +255,36 @@ export function mountUi(handlers: UiHandlers): Ui {
     gpsEl.classList.toggle('is-warn', fix.simulated)
   }
 
+  /**
+   * Marcador y objetivos. Es lo que el jugador mira mientras vuela, asi que va
+   * siempre en el mismo sitio y con el mismo formato que en las gafas.
+   */
+  function renderObjectives(radar: RadarState | null) {
+    objectivesEl.replaceChildren()
+    if (!radar) return
+
+    const score = document.createElement('div')
+    score.className = 'score'
+    score.textContent = `${radar.you.score ?? 0} pts · ${radar.you.kills ?? 0} derribos · ${radar.you.deaths ?? 0} bajas`
+    objectivesEl.appendChild(score)
+
+    for (const objective of radar.objectives ?? []) {
+      const row = document.createElement('div')
+      row.className = 'obj'
+      if (objective.kind === 'primary') row.classList.add('is-primary')
+      if (objective.done) row.classList.add('is-done')
+
+      const label = document.createElement('span')
+      label.textContent = `${objective.kind === 'primary' ? '◆' : '◇'} ${objective.label}`
+
+      const progress = document.createElement('span')
+      progress.textContent = `${objective.progress}/${objective.target}${objective.done ? ' OK' : ''}`
+
+      row.append(label, progress)
+      objectivesEl.appendChild(row)
+    }
+  }
+
   function renderResult(radar: RadarState) {
     const winner = radar.result?.winner ?? null
     const mine = radar.you.callsign
@@ -266,7 +298,7 @@ export function mountUi(handlers: UiHandlers): Ui {
 
     const reason = document.createElement('span')
     const why = radar.result?.reason ?? ''
-    const score = radar.result?.score != null ? `${radar.result.score}% de bloqueo · ` : ''
+    const score = radar.result?.points != null ? `${radar.result.points} pts · ` : ''
     // Con escenario, la cuenta atras vive en la tarjeta de abajo.
     reason.textContent = scenario ? `${score}${why}` : `${score}${why} · nueva partida en ${secs} s`
 
@@ -341,9 +373,11 @@ export function mountUi(handlers: UiHandlers): Ui {
     }
 
     const live = radar.phase === 'flying'
+    const downMs = radar.you.downMs ?? 0
 
     timerEl.textContent = clock(radar.remainingMs)
     timerEl.classList.toggle('is-low', live && radar.remainingMs <= 30_000)
+    renderObjectives(radar)
 
     if (live && radar.lock) {
       lockWrap.hidden = false
@@ -355,13 +389,18 @@ export function mountUi(handlers: UiHandlers): Ui {
       lockFill.style.width = '0%'
     }
 
-    if (live && radar.lockedBy) {
+    if (live && downMs > 0) {
+      warnEl.hidden = false
+      warnEl.textContent = `DERRIBADO · vuelve en ${Math.ceil(downMs / 1000)} s`
+      warnEl.classList.remove('is-missile')
+    } else if (live && radar.lockedBy) {
       const threat = radar.threat ?? null
       const missile = threat !== null && threat.percent >= MISSILE_PERCENT
+      const where = threat?.bearingDeg != null ? ` · ${String(threat.bearingDeg).padStart(3, '0')}°` : ''
       warnEl.hidden = false
       warnEl.textContent = missile
-        ? `⚠ MISIL · ${radar.lockedBy} ${threat!.percent}%`
-        : `⚠ TE BLOQUEAN · ${radar.lockedBy}`
+        ? `⚠ MISIL · ${radar.lockedBy}${where} ${threat!.percent}%`
+        : `⚠ TE BLOQUEAN · ${radar.lockedBy}${where}`
       warnEl.classList.toggle('is-missile', missile)
     } else {
       warnEl.hidden = true

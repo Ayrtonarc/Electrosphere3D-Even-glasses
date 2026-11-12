@@ -57,6 +57,8 @@ export interface HudInput {
   /** Contactos con memoria de pings (frescos primero, luego ultima posicion conocida). */
   tracks: TrackedContact[]
   gpsSimulated: boolean
+  /** Rumbo propio, para convertir marcaciones en flechas relativas. */
+  headingDeg?: number | null
 }
 
 /** Cada campo va a un contenedor distinto del display. */
@@ -96,7 +98,7 @@ function contactLine(track: TrackedContact, lockedCallsign: string | null): stri
 }
 
 export function renderHud(input: HudInput): HudTexts {
-  const { view, callsign, aircraft, conn, connDetail, radar, tracks, gpsSimulated } = input
+  const { view, callsign, aircraft, conn, connDetail, radar, tracks, gpsSimulated, headingDeg } = input
   const me = AIRCRAFT[aircraft]
   const phase = radar?.phase ?? 'flying'
   const lock = radar?.lock ?? null
@@ -115,6 +117,19 @@ export function renderHud(input: HudInput): HudTexts {
   const nearest = fresh[0]
   const threatKm = ALERT_METERS / 1000
 
+  const downMs = radar?.you.downMs ?? 0
+  const points = radar?.you.score ?? 0
+  const primary = radar?.objectives?.find(o => o.kind === 'primary') ?? null
+
+  /**
+   * Flecha hacia la amenaza. Con rumbo conocido es relativa a tu morro (↑ = de
+   * frente); sin rumbo fiable se cae a la brujula, que es lo unico honesto.
+   */
+  const dirOf = (target: { bearingDeg?: number } | null): string | null => {
+    if (!target || target.bearingDeg == null) return null
+    return arrowFor(((target.bearingDeg - (headingDeg ?? 0)) % 360 + 360) % 360)
+  }
+
   // El aviso lleva la SITUACION (quien es la amenaza); la columna, el progreso.
   let alert: string
   if (offline) {
@@ -122,14 +137,22 @@ export function renderHud(input: HudInput): HudTexts {
   } else if (phase === 'finished') {
     const suffix = rank ? ` · ${rank}` : ''
     alert = winner ? (winner === callsign ? `VICTORIA${suffix}` : `GANA ${winner}`) : `EMPATE${suffix}`
+  } else if (downMs > 0) {
+    alert = `DERRIBADO · ${Math.ceil(downMs / 1000)} s`
   } else if (missile) {
-    alert = `!! MISSILE · ${missile.callsign}`
+    const dir = dirOf(missile)
+    alert = dir ? `!! MISSILE ${dir} ${missile.callsign}` : `!! MISSILE · ${missile.callsign}`
   } else if (lockedBy) {
-    alert = `!! TE BLOQUEAN · ${lockedBy}`
+    const dir = dirOf(threat)
+    alert = dir ? `!! TE BLOQUEAN ${dir} · ${lockedBy}` : `!! TE BLOQUEAN · ${lockedBy}`
   } else if (nearest && nearest.distKm <= threatKm) {
     alert = `! ${AIRCRAFT[nearest.aircraft].name} A ${formatKm(nearest.distKm)}`
   } else if (lock) {
     alert = `BLOQUEANDO · ${lock.callsign}`
+  } else if (primary && !primary.done) {
+    // El objetivo de la ronda vive donde antes estaba el contador de contactos:
+    // es lo que hay que mirar cuando no pasa nada.
+    alert = `${primary.label} · ${primary.progress}/${primary.target}`
   } else if (view === 'info') {
     alert = `${me.name} · ${me.role}`
   } else {
@@ -148,7 +171,7 @@ export function renderHud(input: HudInput): HudTexts {
     const lines = [
       winner ? (winner === callsign ? 'BLANCO DERRIBADO' : `GANADOR: ${winner}`) : 'NADIE GANA',
     ]
-    if (rank) lines.push(`RANGO ${rank} · ${radar?.result?.score ?? 0}%`)
+    if (rank) lines.push(`RANGO ${rank} · ${radar?.result?.points ?? 0} PTS`)
     if (round !== null && scenario) lines.push(`RONDA ${round} · ${scenario.name.toUpperCase()}`)
     lines.push('', 'Nueva partida', 'en unos segundos')
     detail = lines.join('\n')
@@ -180,7 +203,7 @@ export function renderHud(input: HudInput): HudTexts {
 
     detail = lines.length ? lines.join('\n') : 'SIN CONTACTOS\n\nMuevete para barrer.'
     info = `${me.name}\nR ${formatKm(rangeKm)}`
-    footer = `${clock(remainingMs)} · 2v: blanco · mant: silencio`
+    footer = `${clock(remainingMs)} · ${points} PTS · 2v: blanco`
   }
 
   return { alert, detail, info, footer }

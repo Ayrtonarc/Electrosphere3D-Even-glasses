@@ -237,6 +237,7 @@ function render() {
     radar: state.radar,
     tracks: memory.list(),
     gpsSimulated: state.fix?.simulated ?? false,
+    headingDeg,
   })
   pushScreen(texts)
 }

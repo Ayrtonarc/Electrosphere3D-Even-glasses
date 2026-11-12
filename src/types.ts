@@ -69,8 +69,8 @@ export interface MatchResult {
   reason: string
   /** Rango propio; el servidor lo manda ya calculado para cada jugador. */
   rank?: Rank
-  /** Mejor bloqueo de la partida en porcentaje del necesario (0..100). */
-  score?: number
+  /** Puntos conseguidos en la ronda. */
+  points?: number
 }
 
 /** Quien te esta fijando y cuanto le falta. */
@@ -78,6 +78,18 @@ export interface Threat {
   callsign: string
   /** Progreso de su bloqueo sobre ti, 0..100. */
   percent: number
+  /** Marcacion desde ti hacia el atacante, 0..359. */
+  bearingDeg?: number
+}
+
+/** Objetivo de la ronda: uno primario y varios secundarios. */
+export interface Objective {
+  id: string
+  kind: 'primary' | 'secondary'
+  label: string
+  progress: number
+  target: number
+  done: boolean
 }
 
 /** Estado del radar propio. El servidor decide que ves: el sigilo no se puede falsear. */
@@ -100,7 +112,17 @@ export interface RadarState {
     emitting?: boolean
     /** Blanco elegido a mano; `null` o ausente = automatico. */
     targetId?: string | null
+    /** Marcador de la ronda. */
+    score?: number
+    kills?: number
+    deaths?: number
+    /** Milisegundos fuera de juego tras ser derribado; 0 si estas en vuelo. */
+    downMs?: number
   }
+  /** Objetivos de la ronda con su progreso. */
+  objectives?: Objective[]
+  /** Cabeza de la tabla, para marcar al as. */
+  leader?: { callsign: string; score: number } | null
   /** Alcance maximo del radar propio contra el blanco mas visible (km). */
   rangeKm: number
   lock: LockState | null

@@ -94,49 +94,78 @@ describe('reglas · bloqueo', () => {
     expect(p.lock.needMs).toBe(18000)
   })
 
-  it('si cambias de blanco el contador vuelve a cero', () => {
-    const { tick, advance } = soloGame('f35')
-    let prev = null
-    let switched = false
-    for (let i = 0; i < 15 && !switched; i++) {
+  it('elegir otro blanco a mano reinicia el contador', () => {
+    const { game, tick, advance } = soloGame('f35')
+    tick()
+    advance(1000)
+    expect(tick().payloads[0].payload.lock.callsign).toBe('GHOST-1')
+
+    game.setTarget('a', 'bot-1') // FLANKER-1
+    const p = tick().payloads[0].payload
+    expect(p.lock.callsign).toBe('FLANKER-1')
+    expect(p.lock.ms).toBe(1000)
+  })
+
+  it('no cambia de blanco porque pase alguien mas cerca', () => {
+    // El fantasma se aleja y se pierde a los ~9 s; el Flanker, fijo a 220 m,
+    // mantiene el bloqueo aunque luego el fantasma vuelva a acercarse.
+    const { game, tick, advance } = soloGame('f35', {
+      bots: { engageRangeM: 1, lockMultiplier: 1, warmupSeconds: 0, cooldownSeconds: 0 },
+    })
+    let ms = 0
+    for (let i = 0; i < 74; i++) {
+      if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon)
       const p = tick().payloads[0].payload
-      if (prev?.callsign === 'GHOST-1' && p.lock?.callsign === 'FLANKER-1') {
-        expect(p.lock.ms).toBe(1000)
-        switched = true
-      }
-      prev = p.lock
+      if (p.lock?.callsign === 'FLANKER-1') ms = p.lock.ms
+      // Con el fantasma mas cerca delante, el blanco no debe saltar.
+      if (i >= 68 && i < 72) expect(p.lock?.callsign).toBe('FLANKER-1')
       advance(1000)
     }
-    expect(switched).toBe(true)
+    expect(ms).toBeGreaterThan(15000)
   })
 
-  it('gana quien completa su tiempo de bloqueo', () => {
-    const { tick, advance } = soloGame('f35')
-    let last = null
-    for (let i = 0; i < 40; i++) {
-      last = tick()
-      if (last.match.phase === 'finished') break
+  // Bots pasivos: el fantasma solo se ve a menos de 90 m y se pierde enseguida,
+  // asi que sin esto el primer derribo lo decide la orbita y no la regla.
+  const passive = { engageRangeM: 1, lockMultiplier: 1, warmupSeconds: 0, cooldownSeconds: 0 }
+
+  it('el derribo suma puntos y la ronda sigue', () => {
+    const { tick, advance } = soloGame('f35', { bots: passive })
+    let payload = null
+    for (let i = 0; i < 28; i++) {
+      payload = tick().payloads[0].payload
       advance(1000)
     }
-    expect(last.match.phase).toBe('finished')
-    expect(last.match.winner).toBe('A')
-    expect(last.match.reason).toContain('bloqueo sobre')
-    expect(last.payloads[0].payload.result.winner).toBe('A')
+    expect(payload.you.kills).toBe(1)
+    expect(payload.you.score).toBe(100)
+    expect(payload.phase).toBe('flying')
   })
 
-  it('el Su-27 cierra antes que el F-35', () => {
-    const ticksToWin = aircraft => {
-      const { tick, advance } = soloGame(aircraft)
-      let n = 0
-      for (; n < 40; n++) {
-        const out = tick()
-        if (out.match.phase === 'finished') return n + 1
+  it('el objetivo primario paga su bonus al segundo derribo', () => {
+    const { game, tick, advance } = soloGame('f35', { bots: passive })
+    let payload = null
+    for (let i = 0; i < 90; i++) {
+      // Sin posiciones el servidor poda al jugador a los 60 s.
+      if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon)
+      payload = tick().payloads[0].payload
+      if (payload.you.kills >= 2) break
+      advance(1000)
+    }
+    expect(payload.you.kills).toBe(2)
+    // 100 + 100 de los derribos y 200 del primario.
+    expect(payload.you.score).toBe(400)
+  })
+
+  it('el Su-27 derriba antes que el F-35', () => {
+    const ticksToKill = aircraft => {
+      const { tick, advance } = soloGame(aircraft, { bots: passive })
+      for (let n = 0; n < 60; n++) {
+        if (tick().payloads[0].payload.you.kills > 0) return n + 1
         advance(1000)
       }
       return -1
     }
-    const su27 = ticksToWin('su27')
-    const f35 = ticksToWin('f35')
+    const su27 = ticksToKill('su27')
+    const f35 = ticksToKill('f35')
     expect(su27).toBeGreaterThan(0)
     expect(f35).toBeGreaterThan(0)
     expect(su27).toBeLessThan(f35)
@@ -144,14 +173,15 @@ describe('reglas · bloqueo', () => {
 })
 
 describe('reglas · ciclo de partida', () => {
-  it('al agotarse el tiempo gana quien mas bloqueo acumulo', () => {
+  it('al agotarse el tiempo gana quien mas puntos tiene', () => {
+    // 5 s no dan ni para un derribo del F-35 (18 s): nadie puntua.
     const { tick, advance } = soloGame('f35', { matchSeconds: 5 })
-    tick() // arranca la partida y acumula 1 s de bloqueo
+    tick()
     advance(5000)
     const out = tick()
     expect(out.match.phase).toBe('finished')
     expect(out.match.reason).toBe('tiempo agotado')
-    expect(out.match.winner).toBe('A')
+    expect(out.match.winner).toBeNull()
   })
 
   it('reinicia la partida tras el marcador', () => {
@@ -372,73 +402,52 @@ describe('reglas · cono de vision', () => {
 })
 
 describe('reglas · rango', () => {
-  it('el derribo se lleva una S con el bloqueo completo', () => {
-    const { tick, advance } = soloGame('f35')
+  const passive = { engageRangeM: 1, lockMultiplier: 1, warmupSeconds: 0, cooldownSeconds: 0 }
+
+  it('ganar con dos derribos se lleva una S', () => {
+    const { game, tick, advance } = soloGame('f35', { bots: passive, matchSeconds: 90 })
+    let last = null
+    for (let i = 0; i < 95; i++) {
+      if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon)
+      last = tick()
+      if (last.match.phase === 'finished') break
+      advance(1000)
+    }
+    const result = last.payloads[0].payload.result
+    expect(result.winner).toBe('A')
+    expect(result.rank).toBe('S')
+    // 200 de dos derribos, 200 del primario y 100 de no morir.
+    expect(result.points).toBe(500)
+  })
+
+  it('ganar con un solo derribo se queda en A', () => {
+    const { tick, advance } = soloGame('f35', { bots: passive, matchSeconds: 30 })
     let last = null
     for (let i = 0; i < 40; i++) {
       last = tick()
       if (last.match.phase === 'finished') break
       advance(1000)
     }
-    const result = last.payloads[0].payload.result
-    expect(result.rank).toBe('S')
-    expect(result.score).toBe(100)
-  })
-
-  it('ganar por tiempo, sin completar el bloqueo, es una A', () => {
-    // Partida de 3 s: no da tiempo a los 18 s del F-35.
-    const { tick, advance } = soloGame('f35', { matchSeconds: 3 })
-    let last = null
-    for (let i = 0; i < 10; i++) {
-      last = tick()
-      if (last.match.phase === 'finished') break
-      advance(1000)
-    }
     const payload = last.payloads[0].payload
     expect(payload.result.winner).toBe('A')
-    expect(payload.result.reason).toBe('tiempo agotado')
     expect(payload.result.rank).toBe('A')
-    expect(payload.result.score).toBeLessThan(100)
+    expect(payload.result.points).toBe(200) // derribo + no morir
   })
 
-  it('cada jugador recibe su propia nota', () => {
-    const { game, tick, advance } = makeGame()
-    game.join('a', { callsign: 'A', aircraft: 'su27' }) // fija en 10 s
-    game.join('b', { callsign: 'B', aircraft: 'f35' }) // fija en 18 s
-    game.setPosition('a', MADRID.lat, MADRID.lon)
-    game.setPosition('b', MADRID.lat + 0.0005, MADRID.lon) // ~55 m: se ven
-
-    let last = null
-    for (let i = 0; i < 20; i++) {
-      last = tick()
-      if (last.match.phase === 'finished') break
-      advance(1000)
-    }
-
-    const a = last.payloads.find(p => p.id === 'a').payload.result
-    const b = last.payloads.find(p => p.id === 'b').payload.result
-    expect(a.winner).toBe('A')
-    expect(a.rank).toBe('S')
-    // B se quedo a medio camino: gana nada, pero no es un cero.
-    expect(b.rank).toBe('C')
-    expect(b.score).toBeGreaterThan(35)
-    expect(b.score).toBeLessThan(100)
-  })
-
-  it('el que no aparece por el radar acaba en D', () => {
-    const { game, tick, advance } = makeGame({ matchSeconds: 3 })
-    game.join('a', { callsign: 'A', aircraft: 'f35' })
-    game.setPosition('a', MADRID.lat, MADRID.lon, null, 90) // de espaldas al fantasma
+  it('el que no puntua acaba en D y no gana', () => {
+    const { tick, advance } = soloGame('f35', { matchSeconds: 3 })
+    // De espaldas a todo: ni fija ni derriba.
     let last = null
     for (let i = 0; i < 10; i++) {
-      last = tick()
-      if (last.match.phase === 'finished') break
+      const round = tick()
+      last = round
+      if (round.match.phase === 'finished') break
       advance(1000)
     }
     const result = last.payloads[0].payload.result
     expect(result.winner).toBeNull()
     expect(result.rank).toBe('D')
-    expect(result.score).toBe(0)
+    expect(result.points).toBe(0)
   })
 })
 
@@ -457,7 +466,9 @@ describe('reglas · amenaza', () => {
     const radar = tick().payloads.find(p => p.id === 'b').payload
 
     expect(radar.lockedBy).toBe('AGRESOR')
-    expect(radar.threat).toEqual({ callsign: 'AGRESOR', percent: 30 })
+    // El porcentaje manda; la marcacion se anade para poder señalar con flecha.
+    expect(radar.threat).toMatchObject({ callsign: 'AGRESOR', percent: 30 })
+    expect(radar.threat.bearingDeg).toBeGreaterThanOrEqual(0)
   })
 
   it('sin nadie encima no hay amenaza', () => {
@@ -484,27 +495,20 @@ describe('reglas · bots que fijan', () => {
     }
   })
 
-  it('cuando el bot cierra, la partida se acaba y gana el bot', () => {
+  it('cuando el bot cierra, te derriba pero la ronda sigue', () => {
     const { tick, advance } = soloGame('f35', { bots: quick })
-    let last = null
+    let payload = null
     for (let i = 0; i < 6; i++) {
-      last = tick()
-      if (last.match.phase === 'finished') break
+      payload = tick().payloads[0].payload
+      if ((payload.you.downMs ?? 0) > 0) break
       advance(1000)
     }
 
-    expect(last.match.phase).toBe('finished')
-    expect(last.match.winner).toBe('GHOST-1')
-    expect(last.match.reason).toContain('bloqueo sobre')
-
-    // Los payloads se montan antes de aplicar el derribo: el resultado llega
-    // al jugador en el tick siguiente.
-    advance(1000)
-    const payload = tick().payloads[0].payload
-    expect(payload.phase).toBe('finished')
-    expect(payload.result.winner).toBe('GHOST-1')
-    expect(payload.result.rank).toBe('D') // el jugador no llego ni al 35 %
-    expect(payload.threat).toBeNull()
+    expect(payload.phase).toBe('flying')
+    expect(payload.you.deaths).toBe(1)
+    expect(payload.you.downMs).toBeGreaterThan(0)
+    // Morir resta, y sin puntos previos no se baja de cero.
+    expect(payload.you.score).toBe(0)
   })
 
   it('el aviso de amenaza trae el progreso del bot', () => {
@@ -519,7 +523,7 @@ describe('reglas · bots que fijan', () => {
 
     expect(payload.lockedBy).toBe('GHOST-1')
     // 3 s de los 18 s que tarda el F-35: 16,7 % redondeado.
-    expect(payload.threat).toEqual({ callsign: 'GHOST-1', percent: 17 })
+    expect(payload.threat).toMatchObject({ callsign: 'GHOST-1', percent: 17 })
   })
 
   it('apagar el radar acorta el alcance al que te enganchan', () => {
@@ -572,6 +576,7 @@ describe('reglas · calibracion de los bots', () => {
 
     let warned = false
     let peak = 0
+    let deaths = 0
     let finish = null
     for (let i = 0; i < 120 && !finish; i++) {
       // El movil manda posicion cada 2 s; sin esto el servidor lo poda a los 60.
@@ -580,17 +585,20 @@ describe('reglas · calibracion de los bots', () => {
       const payload = round.payloads[0]?.payload
       if (payload?.lockedBy === 'GHOST-1') warned = true
       if (payload?.threat) peak = Math.max(peak, payload.threat.percent)
+      if (payload) deaths = payload.you.deaths ?? deaths
       if (round.match.phase === 'finished') finish = round.match
       advance(1000)
     }
 
     expect(warned).toBe(true)
-    expect(peak).toBe(100)
-    expect(finish?.winner).toBe('GHOST-1')
-    expect(finish?.reason).toContain('bloqueo sobre A')
+    // El aviso llega al umbral de misil antes de que el bot cierre.
+    expect(peak).toBeGreaterThanOrEqual(70)
+    // La ronda sigue: el bot solo te saca de juego un rato y te resta puntos.
+    expect(finish).toBeNull()
+    expect(deaths).toBeGreaterThan(0)
   })
 
-  it('el jugador que fija a tiempo gana la carrera al bot', () => {
+  it('el jugador que fija a tiempo madruga al bot', () => {
     // Con la config real el bot necesita 10 s de calentamiento mas 14,4 s de
     // bloqueo, y el jugador cierra el fantasma en 18 s: apurando, pero llega
     // antes. Si alguien baja `warmupSeconds` esto empieza a fallar.
@@ -598,16 +606,15 @@ describe('reglas · calibracion de los bots', () => {
     game.join('a', { callsign: 'A', aircraft: 'f35' })
     game.setPosition('a', MADRID.lat, MADRID.lon) // sin rumbo: cono de 360
 
-    let finish = null
-    for (let i = 0; i < 40 && !finish; i++) {
+    let payload = null
+    for (let i = 0; i < 35; i++) {
       if (i % 2 === 0) game.setPosition('a', MADRID.lat, MADRID.lon)
-      const round = tick()
-      if (round.match.phase === 'finished') finish = round.match
+      payload = tick().payloads[0].payload
       advance(1000)
     }
 
-    expect(finish?.winner).toBe('A')
-    expect(finish?.reason).toContain('bloqueo sobre')
+    expect(payload.you.kills).toBe(1)
+    expect(payload.you.deaths).toBe(0)
   })
 })
 
@@ -621,7 +628,7 @@ describe('reglas · ronda y escenario', () => {
     }
     const payload = last.payloads[0].payload
     expect(payload.scenario).toMatchObject({ id: 'duel', name: 'Duelo' })
-    expect(payload.scenario.rule).toContain('bloqueo')
+    expect(payload.scenario.rule).toContain('puntos')
     // En 20 s ha dado tiempo a terminar la ronda 1 y empezar la 2.
     expect(payload.round).toBeGreaterThan(1)
   })
