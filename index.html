@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#232323" />
+    <title>Aeronet · G2</title>
+    <style>
+      :root {
+        --surface: #232323;
+        --card: #2c2c2c;
+        --line: #3a3a3a;
+        --text: #e5e5e5;
+        --muted: #9aa09a;
+        --accent: #8fe39a;
+        --warn: #e3c58f;
+        --danger: #e39a9a;
+      }
+
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--surface);
+        color: var(--text);
+        font: 14px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        touch-action: manipulation;
+        -webkit-text-size-adjust: 100%;
+        overscroll-behavior: none;
+      }
+
+      #app {
+        display: flex;
+        justify-content: center;
+        padding: 16px 16px 24px;
+      }
+
+      .panel {
+        width: 100%;
+        max-width: 440px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      /* ── Cabecera ─────────────────────────────────────────────── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .brand {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+      }
+
+      .status {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        white-space: nowrap;
+        max-width: 60%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status-open { color: var(--accent); border-color: #3f6b46; }
+      .status-connecting { color: var(--warn); border-color: #6b5f3f; }
+      .status-error, .status-closed { color: var(--danger); border-color: #6b4444; }
+
+      .screen { display: flex; flex-direction: column; gap: 12px; }
+
+      /* ── Pantalla de vuelo ────────────────────────────────────── */
+      .flighthead {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .chip {
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .chip.is-live { color: var(--accent); border-color: #3f6b46; }
+
+      .timer {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 34px;
+        font-weight: 600;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.01em;
+      }
+      .timer.is-low { color: var(--danger); }
+
+      .lockwrap { display: flex; flex-direction: column; gap: 6px; }
+      .locktop {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--accent);
+      }
+      .locktop .times { font-variant-numeric: tabular-nums; }
+      .bar {
+        height: 8px;
+        border-radius: 999px;
+        background: #1b1b1b;
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+      .bar > i {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #5fae6b, var(--accent));
+        transition: width 0.35s ease;
+      }
+
+      .warn {
+        align-self: flex-start;
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        color: var(--danger);
+        border: 1px solid #6b4444;
+        border-radius: 999px;
+        padding: 4px 10px;
+      }
+
+      canvas#radar {
+        width: 100%;
+        max-width: 260px;
+        aspect-ratio: 1;
+        align-self: center;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        background: #141414;
+      }
+
+      ul.contacts {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .contact {
+        display: grid;
+        grid-template-columns: 16px 1fr auto auto;
+        align-items: center;
+        gap: 10px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 12px;
+      }
+      .contact.is-locked { border-color: var(--accent); }
+      .contact.is-stale { opacity: 0.5; }
+      .contact.is-stale .arrow { color: var(--muted); }
+      .contact .arrow { color: var(--accent); text-align: center; }
+      .contact .name { font-size: 14px; font-weight: 600; }
+      .contact .bearing { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .contact .dist { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+      .empty {
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        padding: 10px 0;
+      }
+
+      .result {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        text-align: center;
+      }
+      .result strong { display: block; font-size: 18px; margin-bottom: 2px; }
+      .result span { font-size: 12px; color: var(--muted); }
+
+      .flightfoot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .gps { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .gps.is-warn { color: var(--warn); }
+
+      /* ── Lobby ────────────────────────────────────────────────── */
+      .field { display: flex; flex-direction: column; gap: 6px; }
+
+      label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+      }
+
+      input {
+        width: 100%;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--text);
+        padding: 11px 12px;
+        font-size: 15px;
+        font-family: inherit;
+        outline: none;
+      }
+      input:focus { border-color: #5c7a60; }
+
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+      .card {
+        text-align: left;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--text);
+        padding: 12px;
+        font-family: inherit;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      .card.is-selected { border-color: var(--accent); background: #263329; }
+      .card-name { font-size: 15px; font-weight: 600; }
+      .card-role { font-size: 11px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+      .card-blurb { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+      .card-stats { font-size: 10.5px; color: #7d857e; margin-top: 4px; }
+
+      .advanced { border-top: 1px solid var(--line); padding-top: 10px; }
+      .advanced summary {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px 0;
+      }
+      .advanced input { margin-top: 8px; font-size: 13px; }
+
+      button.primary {
+        width: 100%;
+        background: var(--accent);
+        color: #16221a;
+        border: 0;
+        border-radius: 12px;
+        padding: 14px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      button.primary:active { transform: translateY(1px); }
+
+      button.ghost {
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 9px 14px;
+        font-size: 13px;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .location { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .location.is-warn { color: var(--warn); }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <main class="panel">
+        <header class="topbar">
+          <span class="brand">AERONET</span>
+          <span id="status" class="status status-idle">Sin conectar</span>
+        </header>
+
+        <section id="flight" class="screen" hidden>
+          <div class="flighthead">
+            <span id="phase" class="chip">EN VUELO</span>
+            <span id="timer" class="timer">--:--</span>
+          </div>
+
+          <div id="lockwrap" class="lockwrap" hidden>
+            <div class="locktop">
+              <span id="locklabel">Bloqueando</span>
+              <span id="locktime" class="times">0 / 0 s</span>
+            </div>
+            <div class="bar"><i id="lockfill"></i></div>
+          </div>
+
+          <div id="warn" class="warn" hidden></div>
+
+          <canvas id="radar" width="260" height="260" aria-label="Radar táctico"></canvas>
+
+          <ul id="contacts" class="contacts" aria-live="polite"></ul>
+
+          <div id="result" class="result" hidden></div>
+
+          <div class="flightfoot">
+            <span id="gps" class="gps">GPS listo</span>
+            <button id="disconnect" class="ghost" type="button">Desconectar</button>
+          </div>
+        </section>
+
+        <section id="lobby" class="screen">
+          <section class="field">
+            <label for="callsign">Indicativo</label>
+            <input id="callsign" type="text" maxlength="12" autocomplete="off" spellcheck="false" />
+          </section>
+
+          <section class="field">
+            <label>Aeronave</label>
+            <div id="aircraft" class="cards"></div>
+          </section>
+
+          <details class="advanced">
+            <summary>Servidor</summary>
+            <input id="server" type="text" autocomplete="off" spellcheck="false" />
+          </details>
+
+          <button id="connect" class="primary" type="button">Conectar</button>
+
+          <div id="location" class="location">GPS: buscando señal…</div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

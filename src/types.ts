@@ -1,0 +1,68 @@
+import profiles from './shared/aircraft.json'
+
+/** Clave de los perfiles de aeronave definidos en shared/aircraft.json. */
+export type AircraftId = keyof typeof profiles.types
+
+export interface AircraftProfile {
+  name: string
+  role: string
+  rcs: number
+  radar: number
+  lockSeconds: number
+  blurb: string
+}
+
+export const AIRCRAFT = profiles.types as Record<AircraftId, AircraftProfile>
+export const TICK_MS = profiles.tickMs
+/** Alcance de referencia ya escalado al espacio jugable (a pie). */
+export const BASE_KM = profiles.baseKm * profiles.scale
+/** Suelo de deteccion visual: nadie es invisible a menos de esto. */
+export const VISUAL_RANGE_KM = profiles.visualRangeM / 1000
+export const ALERT_METERS = profiles.alertMeters
+export const MAX_CONTACTS = profiles.maxContacts
+export const SERVER_PORT = profiles.serverPort
+export const PING_MEMORY_MS = profiles.pingMemorySeconds * 1000
+export const MATCH_SECONDS = profiles.matchSeconds
+
+/** Un contacto tal y como lo manda el servidor (ya filtrado por visibilidad). */
+export interface Contact {
+  id: string
+  callsign: string
+  aircraft: AircraftId
+  distKm: number
+  bearingDeg: number
+  kind: 'human' | 'bot'
+}
+
+export type MatchPhase = 'flying' | 'finished'
+
+/** Progreso de bloqueo del jugador sobre su contacto mas cercano. */
+export interface LockState {
+  callsign: string
+  aircraft: AircraftId
+  ms: number
+  needMs: number
+}
+
+export interface MatchResult {
+  winner: string | null
+  reason: string
+}
+
+/** Estado del radar propio. El servidor decide que ves: el sigilo no se puede falsear. */
+export interface RadarState {
+  t: number
+  phase: MatchPhase
+  /** Milisegundos restantes de partida (o del reinicio si esta terminada). */
+  remainingMs: number
+  contacts: Contact[]
+  you: { callsign: string; aircraft: AircraftId; lat: number; lon: number }
+  /** Alcance maximo del radar propio contra el blanco mas visible (km). */
+  rangeKm: number
+  lock: LockState | null
+  /** Quien te esta bloqueando a ti, si alguien lo hace. */
+  lockedBy: string | null
+  result: MatchResult | null
+}
+
+export type ConnState = 'idle' | 'connecting' | 'open' | 'closed' | 'error'

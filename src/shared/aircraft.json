@@ -1,0 +1,31 @@
+{
+  "tickMs": 1000,
+  "baseKm": 4.3,
+  "scale": 0.06,
+  "visualRangeM": 90,
+  "alertMeters": 120,
+  "maxContacts": 5,
+  "pingMemorySeconds": 15,
+  "matchSeconds": 300,
+  "matchRestartSeconds": 12,
+  "serverPort": 8787,
+  "maxPlayers": 8,
+  "types": {
+    "f35": {
+      "name": "F-35",
+      "role": "Sigilo",
+      "rcs": 0.001,
+      "radar": 1,
+      "lockSeconds": 18,
+      "blurb": "Casi invisible. Ve lejos, pero tarda en fijar el blanco."
+    },
+    "su27": {
+      "name": "Su-27",
+      "role": "Cazador",
+      "rcs": 12,
+      "radar": 0.55,
+      "lockSeconds": 10,
+      "blurb": "Firma enorme. Solo ve cerca, pero fija el blanco muy rapido."
+    }
+  }
+}

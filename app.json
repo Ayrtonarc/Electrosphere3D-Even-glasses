@@ -1,0 +1,14 @@
+{
+  "package_id": "com.example.aeronet",
+  "edition": "202601",
+  "name": "Aeronet",
+  "version": "0.1.0",
+  "min_app_version": "2.2.10",
+  "min_sdk_version": "0.0.16",
+  "entrypoint": "index.html",
+  "permissions": [
+    { "name": "location", "desc": "Ubicacion del telefono para situar tu aeronave y calcular contactos." },
+    { "name": "network", "desc": "Conexion con el servidor de partidas.", "whitelist": ["localhost", "192.168.100.91"] }
+  ],
+  "supported_languages": ["es", "en"]
+}
