@@ -8,6 +8,9 @@
  */
 
 import type { Rank } from './types'
+import type { StorageLike } from './storage'
+
+export type { StorageLike }
 
 export interface PlayerRecord {
   rounds: number
@@ -66,11 +69,6 @@ export function settleRound(prev: PlayerRecord, outcome: RoundOutcome): PlayerRe
 }
 
 /** Lo mínimo de `localStorage` que hace falta, para poder falsearlo en tests. */
-export interface StorageLike {
-  getItem(key: string): string | null
-  setItem(key: string, value: string): void
-}
-
 export const RECORD_KEY = 'aeronet:record'
 
 function isRank(value: unknown): value is Rank {

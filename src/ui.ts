@@ -12,6 +12,8 @@ import {
   type StorageLike,
 } from './record'
 import { aircraftSpecial, aircraftStats, aircraftTitle } from './stats'
+import { browserStorage } from './storage'
+import { completeTutorial, shouldShowTutorial, STEPS, type TutorialStep } from './onboarding'
 
 export interface UiHandlers {
   onConnect: (url: string, callsign: string, aircraft: AircraftId) => void
@@ -71,6 +73,32 @@ function defaultServerUrl(): string {
   return `ws://${host}:${SERVER_PORT}`
 }
 
+/**
+ * Dibujos del tutorial, en SVG en linea: sin assets y con el color del tema.
+ * Los gestos son lo unico que el jugador no puede descubrir solo, asi que van
+ * dibujados y no solo descritos.
+ */
+const STEP_ICONS = {
+  cockpit: `<svg viewBox="0 0 132 72" aria-hidden="true">
+    <rect x="6" y="12" width="56" height="30" rx="9" /><rect x="70" y="12" width="56" height="30" rx="9" />
+    <path d="M62 27h8" /><rect x="50" y="50" width="32" height="18" rx="4" />
+  </svg>`,
+  target: `<svg viewBox="0 0 132 72" aria-hidden="true">
+    <circle cx="66" cy="36" r="22" /><circle cx="66" cy="36" r="9" />
+    <path d="M66 6v10M66 56v10M36 36h10M86 36h10" />
+  </svg>`,
+  lock: `<svg viewBox="0 0 132 72" aria-hidden="true">
+    <path d="M46 20H32v32h14M86 20h14v32H86" /><circle cx="66" cy="36" r="9" />
+  </svg>`,
+} as const
+
+const GESTURE_GLYPHS = {
+  tap: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" /><circle cx="16" cy="16" r="4" fill="currentColor" stroke="none" /></svg>`,
+  scroll: `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="12" y="6" width="8" height="20" rx="4" /><path d="M16 10v2M16 20v2" /></svg>`,
+  long: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="10" opacity="0.4" /><path d="M16 6a10 10 0 0 1 8.66 5" stroke-width="4" /></svg>`,
+  double: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="11" cy="16" r="7" /><circle cx="21" cy="16" r="7" /></svg>`,
+} as const
+
 const STATUS_TEXT: Record<ConnState, string> = {
   idle: 'Sin conectar',
   connecting: 'Conectando…',
@@ -93,6 +121,15 @@ export function mountUi(handlers: UiHandlers): Ui {
   const statusEl = $<HTMLSpanElement>('#status')
   const lobbyEl = $<HTMLElement>('#lobby')
   const flightEl = $<HTMLElement>('#flight')
+  const tutorialEl = $<HTMLElement>('#tutorial')
+  const tutStepEl = $<HTMLSpanElement>('#tutstep')
+  const tutArtEl = $<HTMLDivElement>('#tutart')
+  const tutTitleEl = $<HTMLElement>('#tuttitle')
+  const tutBodyEl = $<HTMLParagraphElement>('#tutbody')
+  const tutPrevEl = $<HTMLButtonElement>('#tutprev')
+  const tutNextEl = $<HTMLButtonElement>('#tutnext')
+  const tutSkipEl = $<HTMLButtonElement>('#tutskip')
+  const howtoEl = $<HTMLButtonElement>('#howto')
   const callsignEl = $<HTMLInputElement>('#callsign')
   const serverEl = $<HTMLInputElement>('#server')
   const cardsEl = $<HTMLDivElement>('#aircraft')
@@ -120,16 +157,13 @@ export function mountUi(handlers: UiHandlers): Ui {
   let aircraft: AircraftId = stored.aircraft
   let connected = false
   let radioOn = loadRadio()
+  /** El tutorial tapa el lobby hasta que se termina o se salta. */
+  let tutorialOpen = false
+  let tutIndex = 0
 
   // `localStorage` puede lanzar al tocarlo (modo privado de Safari), asi que se
   // resuelve una vez y el resto del modulo trabaja con `undefined` si no hay.
-  const storage: StorageLike | undefined = (() => {
-    try {
-      return globalThis.localStorage
-    } catch {
-      return undefined
-    }
-  })()
+  const storage: StorageLike | undefined = browserStorage()
   let record: PlayerRecord = loadRecord(storage)
 
   callsignEl.value = stored.callsign
@@ -251,10 +285,94 @@ export function mountUi(handlers: UiHandlers): Ui {
 
   const setConnected = (value: boolean) => {
     connected = value
-    lobbyEl.hidden = value
+    lobbyEl.hidden = value || tutorialOpen
     flightEl.hidden = !value
     resetFlight()
   }
+
+  // ── Tutorial ──────────────────────────────────────────────────
+  function tutorialArt(step: TutorialStep): Node[] {
+    if (step.rows) {
+      const list = document.createElement('ul')
+      list.className = 'tutrows'
+
+      for (const row of step.rows) {
+        const item = document.createElement('li')
+
+        const glyph = document.createElement('span')
+        glyph.className = 'tutglyph'
+        glyph.innerHTML = GESTURE_GLYPHS[row.glyph]
+
+        const text = document.createElement('span')
+        const label = document.createElement('b')
+        label.textContent = row.label
+        text.append(label, document.createTextNode(` · ${row.hint}`))
+
+        item.append(glyph, text)
+        list.appendChild(item)
+      }
+      return [list]
+    }
+
+    if (step.icon) {
+      const art = document.createElement('div')
+      art.className = 'tuticon'
+      art.innerHTML = STEP_ICONS[step.icon]
+      return [art]
+    }
+
+    return []
+  }
+
+  function renderTutorialStep() {
+    const step = STEPS[tutIndex]
+    const last = tutIndex === STEPS.length - 1
+
+    tutStepEl.textContent = `Paso ${tutIndex + 1} de ${STEPS.length}`
+    tutTitleEl.textContent = step.title
+    tutBodyEl.textContent = step.body
+    tutArtEl.replaceChildren(...tutorialArt(step))
+    // En el paso de gestos la lista es el contenido, no el dibujo: va debajo
+    // del texto, no encima como los iconos.
+    tutorialEl.classList.toggle('has-rows', !!step.rows)
+    tutPrevEl.disabled = tutIndex === 0
+    tutNextEl.textContent = last ? 'Entendido' : 'Siguiente'
+    tutSkipEl.hidden = last
+  }
+
+  function showTutorial(index: number) {
+    tutorialOpen = true
+    tutIndex = index
+    tutorialEl.hidden = false
+    lobbyEl.hidden = true
+    renderTutorialStep()
+  }
+
+  function closeTutorial() {
+    tutorialOpen = false
+    // Volver a verlo desde el lobby no cambia nada: sigue terminado.
+    completeTutorial(storage)
+    tutorialEl.hidden = true
+    lobbyEl.hidden = connected
+  }
+
+  tutNextEl.addEventListener('click', () => {
+    if (tutIndex < STEPS.length - 1) {
+      tutIndex += 1
+      renderTutorialStep()
+      return
+    }
+    closeTutorial()
+  })
+
+  tutPrevEl.addEventListener('click', () => {
+    if (tutIndex === 0) return
+    tutIndex -= 1
+    renderTutorialStep()
+  })
+
+  tutSkipEl.addEventListener('click', () => closeTutorial())
+  howtoEl.addEventListener('click', () => showTutorial(0))
 
   const setLink = (text: string | null, live = false) => {
     linkEl.hidden = text === null
@@ -530,6 +648,9 @@ export function mountUi(handlers: UiHandlers): Ui {
       ctx.fillText(AIRCRAFT[track.aircraft].name, x + (x < c ? -7 : 7), y + 3)
     }
   }
+
+  // Primera vez: el tutorial tapa el lobby hasta que se termina o se salta.
+  if (shouldShowTutorial(storage)) showTutorial(0)
 
   drawEmpty()
 

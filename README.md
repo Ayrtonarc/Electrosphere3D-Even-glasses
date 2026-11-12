@@ -90,6 +90,10 @@ npx evenhub qr -i <TU_IP_LAN> -p 5173 --http      # gafas reales
 
 En la app companion: indicativo, aeronave y **Conectar**.
 
+La primera vez aparece un **tutorial de cuatro pasos** (qué es, cómo se gana,
+cómo se derriba y los cuatro gestos del táctil). Se puede saltar, y se vuelve a
+abrir con **Cómo se juega** al pie del lobby.
+
 ## Qué verás
 
 Todo el display es un HUD de realidad aumentada tipo caza: no hay contenedores
@@ -229,6 +233,7 @@ npm run test:watch
 | `src/wakelock.test.ts` | wake lock: soporte ausente, petición única, permiso denegado, release del navegador y recuperación |
 | `src/radio.test.ts` | guion de radio (prioridades, transiciones, contactos) y huecos entre frases |
 | `src/record.test.ts` | récord local: idempotencia por ronda, rachas, mejor nota y almacenamiento corrupto |
+| `src/onboarding.test.ts` | tutorial: pasos, gestión de los cuatro gestos y que no se repita |
 | `server/rules.test.mjs` | visibilidad por RCS, bloqueo, rango, amenaza, puntos y objetivos, bots que fijan |
 | `server/server.test.mjs` | contrato del WebSocket contra el servidor real (welcome, radar, JSON inválido) |
 
