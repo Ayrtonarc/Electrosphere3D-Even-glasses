@@ -262,3 +262,10 @@ build` también comprueba los tipos de los tests.
   servidor cierra el socket viejo; falta un *takeover* explícito por indicativo.
 - `whitelist` del permiso `network` en `app.json` hay que actualizarla con el
   host real del servidor antes de publicar.
+
+## Y ahora qué
+
+El análisis de qué falta para que esto se parezca a un Ace Combat —filtrado por
+lo que estas gafas pueden hacer y lo que no— está en
+[`docs/ace-combat-g2.md`](docs/ace-combat-g2.md): piezas, coste, riesgos y tres
+entregas ordenadas por impacto.
